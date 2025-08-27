@@ -1,12 +1,5 @@
 import React, { useState, useRef } from 'react'
-
-interface FTPCredentials {
-  host: string
-  port: number
-  username: string
-  password: string
-  protocol: 'ftp' | 'sftp'
-}
+import type { TransferItem } from '../../../types'
 
 interface FileItem {
   name: string
@@ -17,11 +10,10 @@ interface FileItem {
 }
 
 interface FileExplorerProps {
-  credentials: FTPCredentials
-  onUpload: (files: File[]) => void
+  onAddTransfer: (transfer: Omit<TransferItem, 'id' | 'progress' | 'status'>) => void
 }
 
-const FileExplorer: React.FC<FileExplorerProps> = ({ credentials, onUpload }) => {
+const FileExplorer: React.FC<FileExplorerProps> = ({ onAddTransfer }) => {
   const [localPath, setLocalPath] = useState('C:\\')
   const [remotePath, setRemotePath] = useState('/')
   const [localFiles] = useState<FileItem[]>([
@@ -67,8 +59,16 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ credentials, onUpload }) =>
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const files = event.target.files
-    if (files) {
-      onUpload(Array.from(files))
+    if (files && onAddTransfer) {
+      Array.from(files).forEach((file) => {
+        onAddTransfer({
+          filename: file.name,
+          type: 'upload',
+          size: file.size,
+          localPath: file.name,
+          remotePath: `/${file.name}`
+        })
+      })
     }
   }
 
@@ -200,7 +200,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ credentials, onUpload }) =>
         files={remoteFiles}
         selectedFiles={selectedRemoteFiles}
         onSelect={(fileName) => handleFileSelect(fileName, false)}
-        title={`Remote Files (${credentials.host})`}
+        title="Remote Files"
         path={remotePath}
         onPathChange={setRemotePath}
       />

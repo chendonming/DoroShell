@@ -2,18 +2,30 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { FTPService } from './ftp-service'
+import type {
+  FTPCredentials,
+  FTPConnectionResult,
+  DirectoryListResult,
+  TransferResult
+} from '../types'
+
+// 创建FTP服务实例
+const ftpService = new FTPService()
 
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1200,
+    height: 800,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      nodeIntegration: false,
+      contextIsolation: true
     }
   })
 
@@ -33,6 +45,11 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  // 设置FTP传输进度监听
+  ftpService.on('transferProgress', (progress) => {
+    mainWindow.webContents.send('transfer-progress', progress)
+  })
 }
 
 // This method will be called when Electron has finished
@@ -49,8 +66,57 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  // FTP IPC 处理程序
+  ipcMain.handle(
+    'ftp:connect',
+    async (_, credentials: FTPCredentials): Promise<FTPConnectionResult> => {
+      return await ftpService.connect(credentials)
+    }
+  )
+
+  ipcMain.handle('ftp:disconnect', async (): Promise<void> => {
+    return await ftpService.disconnect()
+  })
+
+  ipcMain.handle(
+    'ftp:list-directory',
+    async (_, remotePath?: string): Promise<DirectoryListResult> => {
+      return await ftpService.listDirectory(remotePath)
+    }
+  )
+
+  ipcMain.handle(
+    'ftp:change-directory',
+    async (_, remotePath: string): Promise<DirectoryListResult> => {
+      return await ftpService.changeDirectory(remotePath)
+    }
+  )
+
+  ipcMain.handle(
+    'ftp:upload-file',
+    async (_, localPath: string, remotePath: string): Promise<TransferResult> => {
+      return await ftpService.uploadFile(localPath, remotePath)
+    }
+  )
+
+  ipcMain.handle(
+    'ftp:download-file',
+    async (_, remotePath: string, localPath: string): Promise<TransferResult> => {
+      return await ftpService.downloadFile(remotePath, localPath)
+    }
+  )
+
+  ipcMain.handle('ftp:get-current-path', (): string => {
+    return ftpService.getCurrentPath()
+  })
+
+  ipcMain.handle('ftp:get-connection-status', (): boolean => {
+    return ftpService.getConnectionStatus()
+  })
+
+  ipcMain.handle('ftp:get-current-credentials', (): FTPCredentials | null => {
+    return ftpService.getCurrentCredentials()
+  })
 
   createWindow()
 
