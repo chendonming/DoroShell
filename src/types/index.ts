@@ -8,6 +8,17 @@ export interface FTPCredentials {
   protocol: 'ftp' | 'sftp'
 }
 
+export interface SavedFTPConnection {
+  id: string
+  name: string
+  host: string
+  port: number
+  username: string
+  protocol: 'ftp' | 'sftp'
+  lastUsed: string
+  // 注意：出于安全考虑，不保存密码
+}
+
 export interface FileItem {
   name: string
   type: 'file' | 'directory'

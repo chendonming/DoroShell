@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import type { FTPCredentials } from '../../../types'
+import React, { useState, useEffect } from 'react'
+import type { FTPCredentials, SavedFTPConnection } from '../../../types'
 
 interface FTPConnectionProps {
   onConnect: (credentials: FTPCredentials) => Promise<void>
@@ -14,6 +14,101 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
     protocol: 'ftp'
   })
   const [isConnecting, setIsConnecting] = useState(false)
+  const [savedConnections, setSavedConnections] = useState<SavedFTPConnection[]>([])
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string>('')
+  const [saveConnection, setSaveConnection] = useState(false)
+  const [connectionName, setConnectionName] = useState('')
+  const [showSavedConnections, setShowSavedConnections] = useState(false)
+
+  useEffect(() => {
+    loadSavedConnections()
+  }, [])
+
+  const loadSavedConnections = (): void => {
+    try {
+      const saved = localStorage.getItem('ftpConnections')
+      if (saved) {
+        const connections: SavedFTPConnection[] = JSON.parse(saved)
+        setSavedConnections(connections)
+        setShowSavedConnections(connections.length > 0)
+      }
+    } catch (error) {
+      console.error('Failed to load saved connections:', error)
+    }
+  }
+
+  const saveConnectionToStorage = (creds: FTPCredentials, name: string): void => {
+    try {
+      const newConnection: SavedFTPConnection = {
+        id: Date.now().toString(),
+        name: name || `${creds.username}@${creds.host}`,
+        host: creds.host,
+        port: creds.port,
+        username: creds.username,
+        protocol: creds.protocol,
+        lastUsed: new Date().toISOString()
+      }
+
+      const existingConnections = [...savedConnections]
+      const existingIndex = existingConnections.findIndex(
+        (conn) => conn.host === creds.host && conn.username === creds.username
+      )
+
+      if (existingIndex >= 0) {
+        // 更新现有连接
+        existingConnections[existingIndex] = { ...newConnection, id: existingConnections[existingIndex].id }
+      } else {
+        // 添加新连接
+        existingConnections.push(newConnection)
+      }
+
+      // 按最后使用时间排序
+      existingConnections.sort((a, b) => new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime())
+
+      localStorage.setItem('ftpConnections', JSON.stringify(existingConnections))
+      setSavedConnections(existingConnections)
+      setShowSavedConnections(true)
+    } catch (error) {
+      console.error('Failed to save connection:', error)
+    }
+  }
+
+  const loadSavedConnection = (connectionId: string): void => {
+    const connection = savedConnections.find((conn) => conn.id === connectionId)
+    if (connection) {
+      setCredentials({
+        host: connection.host,
+        port: connection.port,
+        username: connection.username,
+        password: '', // 密码需要重新输入
+        protocol: connection.protocol
+      })
+      setSelectedConnectionId(connectionId)
+      setConnectionName(connection.name)
+    }
+  }
+
+  const deleteSavedConnection = (connectionId: string): void => {
+    try {
+      const updatedConnections = savedConnections.filter((conn) => conn.id !== connectionId)
+      localStorage.setItem('ftpConnections', JSON.stringify(updatedConnections))
+      setSavedConnections(updatedConnections)
+      setShowSavedConnections(updatedConnections.length > 0)
+      
+      if (selectedConnectionId === connectionId) {
+        setSelectedConnectionId('')
+        setCredentials({
+          host: '',
+          port: 21,
+          username: '',
+          password: '',
+          protocol: 'ftp'
+        })
+      }
+    } catch (error) {
+      console.error('Failed to delete connection:', error)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
@@ -21,6 +116,12 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
 
     try {
       await onConnect(credentials)
+      
+      // 连接成功后保存配置
+      if (saveConnection) {
+        const name = connectionName.trim() || `${credentials.username}@${credentials.host}`
+        saveConnectionToStorage(credentials, name)
+      }
     } catch (error) {
       console.error('Connection failed:', error)
     } finally {
@@ -37,7 +138,7 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
 
   return (
     <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 animate-fade-in">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 w-full max-w-md mx-4 animate-slide-in">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 w-full max-w-2xl mx-4 animate-slide-in">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full mb-4">
             <svg
@@ -61,6 +162,72 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
             Enter your server details to establish connection
           </p>
         </div>
+
+        {/* Saved Connections */}
+        {showSavedConnections && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                Saved Connections
+              </h3>
+              <button
+                onClick={() => setShowSavedConnections(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {savedConnections.map((connection) => (
+                <div
+                  key={connection.id}
+                  className={`p-3 rounded-lg border transition-colors cursor-pointer ${
+                    selectedConnectionId === connection.id
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                  }`}
+                  onClick={() => loadSavedConnection(connection.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {connection.name}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {connection.username}@{connection.host}:{connection.port} (
+                        {connection.protocol.toUpperCase()})
+                      </div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500">
+                        Last used: {new Date(connection.lastUsed).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteSavedConnection(connection.id)
+                      }}
+                      className="text-red-400 hover:text-red-600 dark:hover:text-red-300 p-1 rounded transition-colors"
+                      title="Delete connection"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!showSavedConnections && savedConnections.length > 0 && (
+          <div className="mb-6">
+            <button
+              onClick={() => setShowSavedConnections(true)}
+              className="w-full p-3 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+            >
+              📁 Show Saved Connections ({savedConnections.length})
+            </button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -155,6 +322,48 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               required
             />
+          </div>
+
+          {/* Save Connection Options */}
+          <div className="border-t border-gray-200 dark:border-gray-600 pt-6">
+            <div className="flex items-center mb-4">
+              <input
+                type="checkbox"
+                id="saveConnection"
+                checked={saveConnection}
+                onChange={(e) => setSaveConnection(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label
+                htmlFor="saveConnection"
+                className="ml-2 text-sm text-gray-700 dark:text-gray-300"
+              >
+                Save this connection for quick access
+              </label>
+            </div>
+
+            {saveConnection && (
+              <div className="form-group">
+                <label
+                  htmlFor="connectionName"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  Connection Name (optional)
+                </label>
+                <input
+                  type="text"
+                  id="connectionName"
+                  value={connectionName}
+                  onChange={(e) => setConnectionName(e.target.value)}
+                  placeholder={
+                    credentials.username && credentials.host
+                      ? `${credentials.username}@${credentials.host}`
+                      : 'My FTP Server'
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                />
+              </div>
+            )}
           </div>
 
           <button
