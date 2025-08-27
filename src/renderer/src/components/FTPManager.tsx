@@ -9,8 +9,17 @@ const FTPManager: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState('')
   const [transfers, setTransfers] = useState<TransferItem[]>([])
   const [, setCurrentCredentials] = useState<FTPCredentials | null>(null)
+  const [isDarkMode, setIsDarkMode] = useState(false)
 
   useEffect(() => {
+    // 检查并设置初始主题
+    const savedTheme = localStorage.getItem('theme')
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const shouldBeDark = savedTheme === 'dark' || (!savedTheme && prefersDark)
+    
+    setIsDarkMode(shouldBeDark)
+    updateTheme(shouldBeDark)
+
     // 检查连接状态
     checkConnectionStatus()
 
@@ -19,6 +28,22 @@ const FTPManager: React.FC = () => {
 
     return cleanup
   }, [])
+
+  const updateTheme = (dark: boolean): void => {
+    const root = document.documentElement
+    if (dark) {
+      root.classList.add('dark')
+    } else {
+      root.classList.remove('dark')
+    }
+    localStorage.setItem('theme', dark ? 'dark' : 'light')
+  }
+
+  const toggleDarkMode = (): void => {
+    const newDarkMode = !isDarkMode
+    setIsDarkMode(newDarkMode)
+    updateTheme(newDarkMode)
+  }
 
   const checkConnectionStatus = async (): Promise<void> => {
     try {
@@ -118,20 +143,44 @@ const FTPManager: React.FC = () => {
   }
 
   return (
-    <div className="ftp-container">
+    <div className="flex flex-col h-full w-full bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="ftp-header">
-        <div className="ftp-header-content">
-          <h1 className="ftp-title">FTP Manager</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div className="status-indicator">
-              <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></div>
-              <span className={`status-text ${isConnected ? 'connected' : 'disconnected'}`}>
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-700 dark:to-purple-700 text-white p-6 shadow-lg">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-2xl font-bold">FTP Manager</h1>
+          <div className="flex items-center gap-4">
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={toggleDarkMode}
+              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
+              title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {isDarkMode ? (
+                <span className="text-lg">☀️</span>
+              ) : (
+                <span className="text-lg">🌙</span>
+              )}
+            </button>
+            
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  isConnected
+                    ? 'bg-green-400 shadow-lg shadow-green-400/50'
+                    : 'bg-red-400 shadow-lg shadow-red-400/50'
+                }`}
+              ></div>
+              <span
+                className={`text-sm font-medium ${isConnected ? 'text-green-100' : 'text-red-100'}`}
+              >
                 {connectionStatus}
               </span>
             </div>
             {isConnected && (
-              <button onClick={handleDisconnect} className="btn btn-disconnect">
+              <button
+                onClick={handleDisconnect}
+                className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-4 py-2 rounded-md transition-colors duration-200"
+              >
                 Disconnect
               </button>
             )}
@@ -142,14 +191,14 @@ const FTPManager: React.FC = () => {
       {!isConnected ? (
         <FTPConnection onConnect={handleConnect} />
       ) : (
-        <div className="main-content">
+        <div className="flex flex-1 h-full overflow-hidden">
           {/* Main Content Area */}
-          <div className="file-explorer">
+          <div className="flex-1 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
             <FileExplorer onAddTransfer={addTransfer} />
           </div>
 
           {/* Transfer Panel */}
-          <div className="transfer-panel">
+          <div className="w-96 bg-white dark:bg-gray-800 flex flex-col">
             <FileTransfer transfers={transfers} onRemoveTransfer={removeTransfer} />
           </div>
         </div>

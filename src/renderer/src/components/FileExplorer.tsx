@@ -53,10 +53,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onAddTransfer }) => {
     }
   }
 
-  const handleUploadClick = (): void => {
-    fileInputRef.current?.click()
-  }
-
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const files = event.target.files
     if (files && onAddTransfer) {
@@ -72,6 +68,38 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onAddTransfer }) => {
     }
   }
 
+  const getFileIcon = (file: FileItem): string => {
+    if (file.type === 'directory') {
+      return '📁'
+    }
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    switch (ext) {
+      case 'txt':
+      case 'md':
+        return '📄'
+      case 'pdf':
+        return '📕'
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return '🖼️'
+      case 'mp4':
+      case 'avi':
+      case 'mov':
+        return '🎬'
+      case 'mp3':
+      case 'wav':
+        return '🎵'
+      case 'zip':
+      case 'rar':
+      case '7z':
+        return '📦'
+      default:
+        return '📄'
+    }
+  }
+
   const FileList: React.FC<{
     files: FileItem[]
     selectedFiles: string[]
@@ -79,71 +107,80 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onAddTransfer }) => {
     title: string
     path: string
     onPathChange: (path: string) => void
-  }> = ({ files, selectedFiles, onSelect, title, path, onPathChange }) => (
-    <div className="file-panel">
-      <div className="panel-header">
-        <h3 className="panel-title">{title}</h3>
-        <div className="path-input-container">
+    isLocal?: boolean
+  }> = ({ files, selectedFiles, onSelect, title, path, onPathChange, isLocal = false }) => (
+    <div className="flex flex-col h-full">
+      <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+          {isLocal && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm transition-colors"
+            >
+              Upload Files
+            </button>
+          )}
+        </div>
+        <div className="flex items-center space-x-2">
           <input
             type="text"
             value={path}
             onChange={(e) => onPathChange(e.target.value)}
-            className="path-input"
+            className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono"
+            placeholder="Enter path..."
           />
-          <button className="btn-go" onClick={() => {}}>
-            Go
+          <button className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 px-3 py-2 rounded-md text-sm transition-colors">
+            ↑
+          </button>
+          <button className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 px-3 py-2 rounded-md text-sm transition-colors">
+            🔄
           </button>
         </div>
       </div>
 
-      <div className="file-table-container">
-        <table className="file-table">
-          <thead>
+      <div className="flex-1 overflow-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
             <tr>
-              <th>
-                <input type="checkbox" />
+              <th className="text-left p-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+                Name
               </th>
-              <th>Name</th>
-              <th>Size</th>
-              <th>Modified</th>
+              <th className="text-left p-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+                Size
+              </th>
+              <th className="text-left p-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+                Modified
+              </th>
             </tr>
           </thead>
           <tbody>
-            {files.map((file, index) => (
+            {files.map((file) => (
               <tr
-                key={index}
-                className={selectedFiles.includes(file.name) ? 'selected' : ''}
+                key={file.name}
                 onClick={() => onSelect(file.name)}
+                className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                  selectedFiles.includes(file.name)
+                    ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
+                    : ''
+                }`}
               >
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={selectedFiles.includes(file.name)}
-                    onChange={() => onSelect(file.name)}
-                  />
-                </td>
-                <td>
-                  <div className="file-name">
-                    <div className={`file-icon ${file.type}`}>
-                      {file.type === 'directory' ? (
-                        <svg fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                        </svg>
-                      ) : (
-                        <svg fill="currentColor" viewBox="0 0 20 20">
-                          <path
-                            fillRule="evenodd"
-                            d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      )}
-                    </div>
-                    <span className="file-name-text">{file.name}</span>
+                <td className="p-3 border-b border-gray-100 dark:border-gray-700">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-lg">{getFileIcon(file)}</span>
+                    <span className="text-sm text-gray-900 dark:text-white font-medium">
+                      {file.name}
+                    </span>
                   </div>
                 </td>
-                <td>{file.type === 'directory' ? '-' : formatFileSize(file.size)}</td>
-                <td>{file.modified}</td>
+                <td className="p-3 border-b border-gray-100 dark:border-gray-700">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {file.type === 'directory' ? '—' : formatFileSize(file.size)}
+                  </span>
+                </td>
+                <td className="p-3 border-b border-gray-100 dark:border-gray-700">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{file.modified}</span>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -154,56 +191,40 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onAddTransfer }) => {
 
   return (
     <>
-      {/* Local Files */}
-      <FileList
-        files={localFiles}
-        selectedFiles={selectedLocalFiles}
-        onSelect={(fileName) => handleFileSelect(fileName, true)}
-        title="Local Files"
-        path={localPath}
-        onPathChange={setLocalPath}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        multiple
+        className="hidden"
       />
 
-      {/* Transfer Controls */}
-      <div className="transfer-controls">
-        <button onClick={handleUploadClick} className="transfer-btn upload" title="Upload files">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-            />
-          </svg>
-        </button>
-        <button className="transfer-btn download" title="Download files">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 11l3 3m0 0l3-3m-3 3V8"
-            />
-          </svg>
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          onChange={handleFileUpload}
-          style={{ display: 'none' }}
-        />
+      <div className="flex h-full">
+        {/* Local Files */}
+        <div className="flex-1 border-r border-gray-200 dark:border-gray-700">
+          <FileList
+            files={localFiles}
+            selectedFiles={selectedLocalFiles}
+            onSelect={(fileName) => handleFileSelect(fileName, true)}
+            title="Local Files"
+            path={localPath}
+            onPathChange={setLocalPath}
+            isLocal={true}
+          />
+        </div>
+
+        {/* Remote Files */}
+        <div className="flex-1">
+          <FileList
+            files={remoteFiles}
+            selectedFiles={selectedRemoteFiles}
+            onSelect={(fileName) => handleFileSelect(fileName, false)}
+            title="Remote Files"
+            path={remotePath}
+            onPathChange={setRemotePath}
+          />
+        </div>
       </div>
-
-      {/* Remote Files */}
-      <FileList
-        files={remoteFiles}
-        selectedFiles={selectedRemoteFiles}
-        onSelect={(fileName) => handleFileSelect(fileName, false)}
-        title="Remote Files"
-        path={remotePath}
-        onPathChange={setRemotePath}
-      />
     </>
   )
 }
