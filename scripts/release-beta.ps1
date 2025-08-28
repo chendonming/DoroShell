@@ -50,7 +50,28 @@ Write-Host "Running local build..."
 npm run build
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+
 $tag = "v$Version"
+# If the tag already exists locally or remotely, increment until an unused tag is found
+Write-Host "Checking for existing tags..."
+while ($true) {
+  $existsLocal = (git tag --list $tag) -ne $null -and (git tag --list $tag).Trim() -ne ''
+  $existsRemote = (git ls-remote --tags origin $tag) -ne $null -and (git ls-remote --tags origin $tag).Trim() -ne ''
+  if (-not $existsLocal -and -not $existsRemote) { break }
+  Write-Host "Tag $tag already exists; incrementing..."
+  # parse current Version like base-beta.N, increment N
+  if ($Version -match '-beta\.(\d+)$') {
+    $num = [int]$Matches[1]
+    $num = $num + 1
+    $Version = $Version -replace '-beta\.(\d+)$', "-beta.$num"
+    $tag = "v$Version"
+  } else {
+    # fallback: append .1
+    $Version = "$Version-beta.1"
+    $tag = "v$Version"
+  }
+}
+
 Write-Host "Creating annotated tag $tag"
 git tag -a $tag -m "beta release $tag"
 if ($LASTEXITCODE -ne 0) { Write-Host "Failed to create tag" -ForegroundColor Red; exit $LASTEXITCODE }
