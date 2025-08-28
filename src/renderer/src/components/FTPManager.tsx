@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import ConnectionManager from './ConnectionManager'
 import LocalFileExplorer from './LocalFileExplorer'
-import RemoteFileExplorer from './RemoteFileExplorer'
+import RemoteFileExplorer, { type RemoteFileExplorerRef } from './RemoteFileExplorer'
 import FileTransfer from './FileTransfer'
 import type { FTPCredentials, TransferItem, TransferProgress } from '../../../types'
 
@@ -14,6 +14,7 @@ const FTPManager: React.FC = () => {
   const [showConnectionManager, setShowConnectionManager] = useState(false)
   const [showTransferPanel, setShowTransferPanel] = useState(false)
   const [localCurrentPath, setLocalCurrentPath] = useState<string>('')
+  const remoteFileExplorerRef = useRef<RemoteFileExplorerRef>(null)
 
   useEffect(() => {
     // 检查并设置初始主题
@@ -196,6 +197,10 @@ const FTPManager: React.FC = () => {
               t.id === newTransfer.id ? { ...t, status: 'completed', progress: 100 } : t
             )
           )
+          // 上传成功后刷新远程文件列表
+          if (remoteFileExplorerRef.current) {
+            await remoteFileExplorerRef.current.refresh()
+          }
         } else {
           // 上传失败
           setTransfers((prev) =>
@@ -303,7 +308,7 @@ const FTPManager: React.FC = () => {
             <>
               {/* Remote File Explorer */}
               <div className={`${showTransferPanel ? 'flex-1' : 'h-full'}`}>
-                <RemoteFileExplorer onAddTransfer={addRemoteTransfer} />
+                <RemoteFileExplorer ref={remoteFileExplorerRef} onAddTransfer={addRemoteTransfer} />
               </div>
 
               {/* Transfer Panel - Integrated as bottom section */}
