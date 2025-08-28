@@ -183,9 +183,12 @@ export class FTPService extends EventEmitter {
         }
       }
 
+      console.log('[FTPService] uploadFile called ->', { transferId, localPath, remotePath })
+
       try {
         // 检查本地文件是否存在
         if (!fs.existsSync(localPath)) {
+          console.warn('[FTPService] uploadFile local file not found ->', localPath)
           return {
             success: false,
             transferId,
@@ -208,6 +211,13 @@ export class FTPService extends EventEmitter {
           uploadedBytes += info.bytes
           const progress = Math.round((uploadedBytes / stats.size) * 100)
 
+          // 记录进度信息
+          console.log('[FTPService] upload progress ->', {
+            transferId,
+            bytes: uploadedBytes,
+            progress
+          })
+
           this.emit('transferProgress', {
             transferId,
             progress: Math.min(progress, 100),
@@ -219,6 +229,8 @@ export class FTPService extends EventEmitter {
 
         // 清除进度追踪
         this.client.trackProgress()
+
+        console.log('[FTPService] uploadFile success ->', { transferId, localPath, remotePath })
 
         // 发送完成状态
         this.emit('transferProgress', {
@@ -232,7 +244,12 @@ export class FTPService extends EventEmitter {
           transferId
         }
       } catch (error) {
-        console.error('Upload failed:', error)
+        console.error('[FTPService] uploadFile failed ->', {
+          transferId,
+          localPath,
+          remotePath,
+          error
+        })
 
         // 清除进度追踪
         if (this.client) {

@@ -183,25 +183,57 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       e.stopPropagation()
     }
 
-    const handleDrop = (e: React.DragEvent): void => {
+    const handleDrop = async (e: React.DragEvent): Promise<void> => {
       e.preventDefault()
       e.stopPropagation()
 
       setDragState({ isDragOver: false, dragDepth: 0 })
 
-      const items = Array.from(e.dataTransfer.items)
-      processDroppedItems(items)
+      // 打印原始 counts 帮助调试不同平台的 Drag 数据表现
+      try {
+        const itemsLength = e.dataTransfer?.items?.length ?? 0
+        const filesLength = e.dataTransfer?.files?.length ?? 0
+        console.log('[Renderer] handleDrop raw ->', { itemsLength, filesLength })
+
+        const items = Array.from(e.dataTransfer.items || [])
+        // 将 FileList 一并传入 processDroppedItems，便于后续合并补充
+        await processDroppedItems(items, e.dataTransfer.files)
+      } catch (error) {
+        console.error('handleDrop error:', error)
+      }
     }
 
     // 处理拖放的文件和文件夹
-    const processDroppedItems = async (items: DataTransferItem[]): Promise<void> => {
+    const processDroppedItems = async (
+      items: DataTransferItem[],
+      fileList?: FileList
+    ): Promise<void> => {
       const files: Array<{ file: File; path: string }> = []
 
       for (const item of items) {
         if (item.kind === 'file') {
-          const entry = item.webkitGetAsEntry()
+          // 首选使用 FileSystemEntry（支持目录递归）
+          const possibleEntry = item as unknown as { webkitGetAsEntry?: () => FileSystemEntry }
+          const entry = possibleEntry.webkitGetAsEntry ? possibleEntry.webkitGetAsEntry() : null
           if (entry) {
             await processEntry(entry, '', files)
+            continue
+          }
+
+          // 回退：尝试直接获取 File 对象（适用于大多数现代浏览器/环境）
+          const file = (item as DataTransferItem).getAsFile()
+          if (file) {
+            files.push({ file, path: file.name })
+            continue
+          }
+        }
+      }
+
+      // 如果 FileList 存在，合并其中未包含的文件（部分平台可能在 items 中缺失）
+      if (fileList && fileList.length > 0) {
+        for (const f of Array.from(fileList)) {
+          if (!files.find((u) => u.file.name === f.name && u.file.size === f.size)) {
+            files.push({ file: f, path: f.name })
           }
         }
       }
@@ -247,6 +279,11 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       uploads: Array<{ file: File; path: string }>
     ): Promise<void> => {
       setOverwriteAction(null)
+
+      console.log('[Renderer] handleFileUploads called ->', {
+        count: uploads.length,
+        uploads: uploads.map((u) => ({ name: u.file.name, path: u.path }))
+      })
 
       for (const upload of uploads) {
         await processUpload(upload)
@@ -301,6 +338,12 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     ): Promise<void> => {
       try {
         // 添加到传输队列
+        console.log('[Renderer] RemoteFileExplorer performUpload ->', {
+          filename: upload.file.name,
+          size: upload.file.size,
+          targetPath
+        })
+
         await onAddTransfer({
           type: 'upload',
           filename: upload.file.name,

@@ -180,6 +180,10 @@ const FTPManager: React.FC = () => {
     // 立即开始下载
     try {
       if (transfer.type === 'download') {
+        console.log('[Renderer] FTPManager start download ->', {
+          localPath: transfer.localPath,
+          remotePath: transfer.remotePath
+        })
         const result = await window.api.ftp.downloadFile(
           transfer.remotePath,
           transfer.localPath,
@@ -187,6 +191,7 @@ const FTPManager: React.FC = () => {
         )
 
         if (result.success) {
+          console.log('[Renderer] FTPManager download success ->', { id: newTransfer.id, result })
           // 下载成功，更新状态为完成
           setTransfers((prev) =>
             prev.map((t) =>
@@ -194,12 +199,18 @@ const FTPManager: React.FC = () => {
             )
           )
         } else {
+          console.error('[Renderer] FTPManager download failed ->', { id: newTransfer.id, result })
           // 下载失败
           setTransfers((prev) =>
             prev.map((t) => (t.id === newTransfer.id ? { ...t, status: 'failed' } : t))
           )
         }
       } else if (transfer.type === 'upload') {
+        console.log('[Renderer] FTPManager start upload ->', {
+          localPath: transfer.localPath,
+          remotePath: transfer.remotePath,
+          dragged: !!transfer.draggedFile
+        })
         let result: { success: boolean; error?: string }
 
         if (transfer.draggedFile) {
@@ -216,6 +227,7 @@ const FTPManager: React.FC = () => {
         }
 
         if (result.success) {
+          console.log('[Renderer] FTPManager upload success ->', { id: newTransfer.id, result })
           // 上传成功
           setTransfers((prev) =>
             prev.map((t) =>
@@ -227,6 +239,7 @@ const FTPManager: React.FC = () => {
             await remoteFileExplorerRef.current.refresh()
           }
         } else {
+          console.error('[Renderer] FTPManager upload failed ->', { id: newTransfer.id, result })
           // 上传失败
           setTransfers((prev) =>
             prev.map((t) => (t.id === newTransfer.id ? { ...t, status: 'failed' } : t))

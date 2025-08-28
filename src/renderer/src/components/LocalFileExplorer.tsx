@@ -262,6 +262,10 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
     }
 
     const fileNames = filesToDelete.join('、')
+    console.log('[Renderer] LocalFileExplorer handleDelete called ->', {
+      currentPath,
+      filesToDelete
+    })
     const confirmDelete = confirm(`确定要删除 "${fileNames}" 吗？`)
     if (!confirmDelete) return
 
@@ -272,12 +276,14 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
 
         if (stats.success && stats.stats?.isDirectory) {
           const result = await window.api.fs.deleteDirectory(fullPath)
+          console.log('[Renderer] deleteDirectory result ->', { fullPath, result })
           if (!result.success) {
             alert(`删除文件夹 "${fileName}" 失败: ${result.error}`)
             continue
           }
         } else {
           const result = await window.api.fs.deleteFile(fullPath)
+          console.log('[Renderer] deleteFile result ->', { fullPath, result })
           if (!result.success) {
             alert(`删除文件 "${fileName}" 失败: ${result.error}`)
             continue
@@ -298,6 +304,11 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
     const filesToUpload = files.filter(
       (file) => selectedFiles.has(file.path) && file.type === 'file'
     )
+
+    console.log('[Renderer] LocalFileExplorer handleUpload called ->', {
+      currentPath,
+      filesToUpload
+    })
 
     filesToUpload.forEach((file) => {
       onAddTransfer({

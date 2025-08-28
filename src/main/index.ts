@@ -2,7 +2,7 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { FTPService } from './ftp-service'
+import { ConnectionManager } from './connection-manager'
 import { stat, readdir, writeFile, mkdir, unlink, rmdir, rename } from 'fs/promises'
 import { homedir } from 'os'
 import type {
@@ -14,8 +14,8 @@ import type {
   LocalDirectoryResult
 } from '../types'
 
-// 创建FTP服务实例
-const ftpService = new FTPService()
+// 创建连接管理器实例
+const connectionManager = new ConnectionManager()
 
 function createWindow(): void {
   // Create the browser window.
@@ -50,9 +50,9 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 设置FTP传输进度监听
-  ftpService.on('transferProgress', (progress) => {
-    mainWindow.webContents.send('transfer-progress', progress)
+  // 监听传输进度事件
+  connectionManager.on('transferProgress', (progress) => {
+    mainWindow?.webContents.send('transferProgress', progress)
   })
 }
 
@@ -70,36 +70,47 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // FTP IPC 处理程序
+  // FTP连接处理
   ipcMain.handle(
     'ftp:connect',
     async (_, credentials: FTPCredentials): Promise<FTPConnectionResult> => {
-      return await ftpService.connect(credentials)
+      try {
+        return await connectionManager.connect(credentials)
+      } catch (error) {
+        console.error('连接失败:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '连接失败'
+        }
+      }
     }
   )
 
   ipcMain.handle('ftp:disconnect', async (): Promise<void> => {
-    return await ftpService.disconnect()
+    return await connectionManager.disconnect()
   })
 
   ipcMain.handle(
     'ftp:list-directory',
     async (_, remotePath?: string): Promise<DirectoryListResult> => {
-      return await ftpService.listDirectory(remotePath)
+      return await connectionManager.listDirectory(remotePath)
     }
   )
 
   ipcMain.handle(
     'ftp:change-directory',
     async (_, remotePath: string): Promise<DirectoryListResult> => {
-      return await ftpService.changeDirectory(remotePath)
+      return await connectionManager.changeDirectory(remotePath)
     }
   )
 
   ipcMain.handle(
     'ftp:upload-file',
     async (_, localPath: string, remotePath: string): Promise<TransferResult> => {
-      return await ftpService.uploadFile(localPath, remotePath)
+      console.log('[IPC] ftp:upload-file called ->', { localPath, remotePath })
+      const result = await connectionManager.uploadFile(localPath, remotePath)
+      console.log('[IPC] ftp:upload-file result ->', result)
+      return result
     }
   )
 
@@ -117,6 +128,7 @@ app.whenReady().then(() => {
       const path = await import('path')
 
       try {
+        console.log('[IPC] ftp:upload-dragged-file called ->', { fileName, remotePath })
         // 创建临时文件
         const tempDir = os.tmpdir()
         const tempFilePath = path.join(tempDir, `drag_upload_${Date.now()}_${fileName}`)
@@ -125,7 +137,9 @@ app.whenReady().then(() => {
         await fs.writeFile(tempFilePath, Buffer.from(fileBuffer))
 
         // 上传文件
-        const result = await ftpService.uploadFile(tempFilePath, remotePath)
+        console.log('[IPC] ftp:upload-dragged-file tempFile ->', tempFilePath)
+        const result = await connectionManager.uploadFile(tempFilePath, remotePath)
+        console.log('[IPC] ftp:upload-dragged-file result ->', result)
 
         // 清理临时文件
         try {
@@ -148,20 +162,20 @@ app.whenReady().then(() => {
   ipcMain.handle(
     'ftp:download-file',
     async (_, remotePath: string, localPath: string): Promise<TransferResult> => {
-      return await ftpService.downloadFile(remotePath, localPath)
+      return await connectionManager.downloadFile(remotePath, localPath)
     }
   )
 
   ipcMain.handle('ftp:get-current-path', (): string => {
-    return ftpService.getCurrentPath()
+    return connectionManager.getCurrentPath()
   })
 
   ipcMain.handle('ftp:get-connection-status', (): boolean => {
-    return ftpService.getConnectionStatus()
+    return connectionManager.getConnectionStatus()
   })
 
   ipcMain.handle('ftp:get-current-credentials', (): FTPCredentials | null => {
-    return ftpService.getCurrentCredentials()
+    return connectionManager.getCurrentCredentials()
   })
 
   // 本地文件系统 API
@@ -258,10 +272,13 @@ app.whenReady().then(() => {
 
   // 删除文件
   ipcMain.handle('fs:delete-file', async (_, filePath: string) => {
+    console.log('[IPC] fs:delete-file called ->', filePath)
     try {
       await unlink(filePath)
+      console.log('[IPC] fs:delete-file success ->', filePath)
       return { success: true }
     } catch (error) {
+      console.error('[IPC] fs:delete-file failed ->', filePath, error)
       return {
         success: false,
         error: error instanceof Error ? error.message : '删除文件失败'
@@ -271,10 +288,13 @@ app.whenReady().then(() => {
 
   // 删除文件夹
   ipcMain.handle('fs:delete-directory', async (_, dirPath: string) => {
+    console.log('[IPC] fs:delete-directory called ->', dirPath)
     try {
       await rmdir(dirPath)
+      console.log('[IPC] fs:delete-directory success ->', dirPath)
       return { success: true }
     } catch (error) {
+      console.error('[IPC] fs:delete-directory failed ->', dirPath, error)
       return {
         success: false,
         error: error instanceof Error ? error.message : '删除文件夹失败'
@@ -284,10 +304,13 @@ app.whenReady().then(() => {
 
   // 重命名文件
   ipcMain.handle('fs:rename-file', async (_, oldPath: string, newPath: string) => {
+    console.log('[IPC] fs:rename-file called ->', { oldPath, newPath })
     try {
       await rename(oldPath, newPath)
+      console.log('[IPC] fs:rename-file success ->', { oldPath, newPath })
       return { success: true }
     } catch (error) {
+      console.error('[IPC] fs:rename-file failed ->', { oldPath, newPath, error })
       return {
         success: false,
         error: error instanceof Error ? error.message : '重命名失败'
