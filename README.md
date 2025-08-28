@@ -2,6 +2,8 @@
 
 一个使用 Electron + React + TypeScript 构建的现代化 FTP 文件管理工具，类似 FileZilla 的功能。
 
+![](./resources/welcome.jpg)
+
 ## 功能特性
 
 ### 🔌 连接管理
