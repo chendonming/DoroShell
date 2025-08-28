@@ -12,12 +12,25 @@ interface RemoteFileItem {
 
 interface RemoteFileExplorerProps {
   onAddTransfer: (
-    transfer: Omit<TransferItem, 'id' | 'progress' | 'status' | 'localPath'>
+    transfer: Omit<TransferItem, 'id' | 'progress' | 'status' | 'localPath'> & {
+      draggedFile?: File
+    }
   ) => Promise<void>
 }
 
 export interface RemoteFileExplorerRef {
   refresh: () => Promise<void>
+}
+
+interface OverwriteConfirmDialog {
+  visible: boolean
+  fileName: string
+  onConfirm: (action: 'yes' | 'no' | 'yesToAll' | 'noToAll') => void
+}
+
+interface DragState {
+  isDragOver: boolean
+  dragDepth: number
 }
 
 const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerProps>(
@@ -26,6 +39,15 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     const [files, setFiles] = useState<RemoteFileItem[]>([])
     const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
     const [loading, setLoading] = useState(false)
+    const [dragState, setDragState] = useState<DragState>({ isDragOver: false, dragDepth: 0 })
+    const [overwriteDialog, setOverwriteDialog] = useState<OverwriteConfirmDialog>({
+      visible: false,
+      fileName: '',
+      onConfirm: () => {}
+    })
+    const [overwriteAction, setOverwriteAction] = useState<
+      'yes' | 'no' | 'yesToAll' | 'noToAll' | null
+    >(null)
 
     const loadRemoteFiles = useCallback(async (): Promise<void> => {
       setLoading(true)
@@ -134,6 +156,163 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       }
     }
 
+    // 拖拽处理函数
+    const handleDragEnter = (e: React.DragEvent): void => {
+      e.preventDefault()
+      e.stopPropagation()
+      setDragState((prev) => ({
+        isDragOver: true,
+        dragDepth: prev.dragDepth + 1
+      }))
+    }
+
+    const handleDragLeave = (e: React.DragEvent): void => {
+      e.preventDefault()
+      e.stopPropagation()
+      setDragState((prev) => {
+        const newDepth = prev.dragDepth - 1
+        return {
+          isDragOver: newDepth > 0,
+          dragDepth: newDepth
+        }
+      })
+    }
+
+    const handleDragOver = (e: React.DragEvent): void => {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    const handleDrop = (e: React.DragEvent): void => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      setDragState({ isDragOver: false, dragDepth: 0 })
+
+      const items = Array.from(e.dataTransfer.items)
+      processDroppedItems(items)
+    }
+
+    // 处理拖放的文件和文件夹
+    const processDroppedItems = async (items: DataTransferItem[]): Promise<void> => {
+      const files: Array<{ file: File; path: string }> = []
+
+      for (const item of items) {
+        if (item.kind === 'file') {
+          const entry = item.webkitGetAsEntry()
+          if (entry) {
+            await processEntry(entry, '', files)
+          }
+        }
+      }
+
+      if (files.length > 0) {
+        await handleFileUploads(files)
+      }
+    }
+
+    // 递归处理文件夹条目
+    const processEntry = async (
+      entry: FileSystemEntry,
+      basePath: string,
+      files: Array<{ file: File; path: string }>
+    ): Promise<void> => {
+      if (entry.isFile) {
+        const fileEntry = entry as FileSystemFileEntry
+        return new Promise((resolve) => {
+          fileEntry.file((file) => {
+            const relativePath = basePath ? `${basePath}/${file.name}` : file.name
+            files.push({ file, path: relativePath })
+            resolve()
+          })
+        })
+      } else if (entry.isDirectory) {
+        const dirEntry = entry as FileSystemDirectoryEntry
+        const reader = dirEntry.createReader()
+
+        return new Promise((resolve) => {
+          reader.readEntries(async (entries) => {
+            for (const childEntry of entries) {
+              const newBasePath = basePath ? `${basePath}/${entry.name}` : entry.name
+              await processEntry(childEntry, newBasePath, files)
+            }
+            resolve()
+          })
+        })
+      }
+    }
+
+    // 处理文件上传，包括覆盖确认
+    const handleFileUploads = async (
+      uploads: Array<{ file: File; path: string }>
+    ): Promise<void> => {
+      setOverwriteAction(null)
+
+      for (const upload of uploads) {
+        await processUpload(upload)
+      }
+
+      // 清理
+      setOverwriteAction(null)
+    }
+
+    // 处理单个文件上传
+    const processUpload = async (upload: { file: File; path: string }): Promise<void> => {
+      const targetPath = remotePath === '/' ? `/${upload.path}` : `${remotePath}/${upload.path}`
+
+      // 检查是否存在同名文件
+      const existingFile = files.find((f) => f.name === upload.file.name)
+
+      if (existingFile && overwriteAction !== 'yesToAll') {
+        if (overwriteAction === 'noToAll') {
+          return // 跳过这个文件
+        }
+
+        // 显示覆盖确认对话框
+        return new Promise((resolve) => {
+          setOverwriteDialog({
+            visible: true,
+            fileName: upload.file.name,
+            onConfirm: async (action) => {
+              setOverwriteDialog({ visible: false, fileName: '', onConfirm: () => {} })
+
+              if (action === 'yesToAll' || action === 'noToAll') {
+                setOverwriteAction(action)
+              }
+
+              if (action === 'yes' || action === 'yesToAll') {
+                await performUpload(upload, targetPath)
+              }
+
+              resolve()
+            }
+          })
+        })
+      } else {
+        // 没有冲突或者已经选择了全部覆盖
+        await performUpload(upload, targetPath)
+      }
+    }
+
+    // 执行实际的文件上传
+    const performUpload = async (
+      upload: { file: File; path: string },
+      targetPath: string
+    ): Promise<void> => {
+      try {
+        // 添加到传输队列
+        await onAddTransfer({
+          type: 'upload',
+          filename: upload.file.name,
+          size: upload.file.size,
+          remotePath: targetPath,
+          draggedFile: upload.file // 传递File对象给FTPManager处理
+        })
+      } catch (error) {
+        console.error('上传失败:', error)
+      }
+    }
+
     const handleDoubleClick = async (file: RemoteFileItem): Promise<void> => {
       if (file.type === 'directory') {
         const newPath = remotePath === '/' ? `/${file.name}` : `${remotePath}/${file.name}`
@@ -221,7 +400,17 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     }
 
     return (
-      <div className="h-full flex flex-col bg-white dark:bg-gray-800">
+      <div
+        className={`h-full flex flex-col bg-white dark:bg-gray-800 ${
+          dragState.isDragOver
+            ? 'border-2 border-dashed border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+            : ''
+        }`}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
         {/* Header */}
         <div className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
@@ -361,6 +550,71 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             </table>
           )}
         </div>
+
+        {/* 拖拽提示覆盖层 */}
+        {dragState.isDragOver && (
+          <div className="absolute inset-0 flex items-center justify-center bg-blue-500/20 backdrop-blur-sm z-50">
+            <div className="text-center">
+              <div className="text-4xl mb-4">📁</div>
+              <div className="text-lg font-semibold text-blue-600 dark:text-blue-300">
+                将文件和文件夹拖放到这里上传
+              </div>
+              <div className="text-sm text-blue-500 dark:text-blue-400 mt-2">
+                支持多文件和文件夹上传
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 覆盖确认对话框 */}
+        {overwriteDialog.visible && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="text-2xl">⚠️</div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    文件已存在
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    文件 &ldquo;{overwriteDialog.fileName}&rdquo; 已存在，是否要覆盖？
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => overwriteDialog.onConfirm('yes')}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+                  >
+                    是
+                  </button>
+                  <button
+                    onClick={() => overwriteDialog.onConfirm('no')}
+                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+                  >
+                    否
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => overwriteDialog.onConfirm('yesToAll')}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+                  >
+                    全部为是
+                  </button>
+                  <button
+                    onClick={() => overwriteDialog.onConfirm('noToAll')}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+                  >
+                    全部为否
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

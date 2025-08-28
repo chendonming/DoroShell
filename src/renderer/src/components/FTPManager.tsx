@@ -137,20 +137,32 @@ const FTPManager: React.FC = () => {
 
   // 专门用于远程文件下载的传输函数，使用本地当前路径作为下载位置
   const addRemoteTransfer = async (
-    transfer: Omit<TransferItem, 'id' | 'progress' | 'status' | 'localPath'>
+    transfer: Omit<TransferItem, 'id' | 'progress' | 'status' | 'localPath'> & {
+      draggedFile?: File
+    }
   ): Promise<void> => {
-    if (!localCurrentPath) {
-      console.error('本地路径未设置，无法下载')
-      return
-    }
+    if (transfer.type === 'upload' && transfer.draggedFile) {
+      // 处理拖拽上传的文件
+      const fullTransfer = {
+        ...transfer,
+        localPath: `[DRAGGED_FILE]${transfer.draggedFile.name}`,
+        draggedFile: transfer.draggedFile
+      }
+      await addTransfer(fullTransfer)
+    } else if (transfer.type === 'download') {
+      // 处理下载
+      if (!localCurrentPath) {
+        console.error('本地路径未设置，无法下载')
+        return
+      }
 
-    const localPath = await window.api.path.joinPath(localCurrentPath, transfer.filename)
-    const fullTransfer = {
-      ...transfer,
-      localPath
+      const localPath = await window.api.path.joinPath(localCurrentPath, transfer.filename)
+      const fullTransfer = {
+        ...transfer,
+        localPath
+      }
+      await addTransfer(fullTransfer)
     }
-
-    await addTransfer(fullTransfer)
   }
 
   const addTransfer = async (
@@ -188,7 +200,20 @@ const FTPManager: React.FC = () => {
           )
         }
       } else if (transfer.type === 'upload') {
-        const result = await window.api.ftp.uploadFile(transfer.localPath, transfer.remotePath)
+        let result: { success: boolean; error?: string }
+
+        if (transfer.draggedFile) {
+          // 处理拖拽上传的文件
+          const fileBuffer = await transfer.draggedFile.arrayBuffer()
+          result = await window.api.ftp.uploadDraggedFile(
+            fileBuffer,
+            transfer.draggedFile.name,
+            transfer.remotePath
+          )
+        } else {
+          // 处理常规文件上传
+          result = await window.api.ftp.uploadFile(transfer.localPath, transfer.remotePath)
+        }
 
         if (result.success) {
           // 上传成功

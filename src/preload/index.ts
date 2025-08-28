@@ -27,6 +27,13 @@ const api: ElectronAPI = {
     uploadFile: (localPath: string, remotePath: string): Promise<TransferResult> =>
       ipcRenderer.invoke('ftp:upload-file', localPath, remotePath),
 
+    uploadDraggedFile: (
+      fileBuffer: ArrayBuffer,
+      fileName: string,
+      remotePath: string
+    ): Promise<TransferResult> =>
+      ipcRenderer.invoke('ftp:upload-dragged-file', fileBuffer, fileName, remotePath),
+
     downloadFile: (
       remotePath: string,
       localPath: string,

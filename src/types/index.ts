@@ -38,6 +38,7 @@ export interface TransferItem {
   localPath: string
   remotePath: string
   error?: string
+  draggedFile?: File // 用于支持拖拽上传的文件
 }
 
 export interface FTPConnectionResult {
@@ -118,6 +119,11 @@ export interface FTPAPI {
   listDirectory: (remotePath?: string) => Promise<DirectoryListResult>
   changeDirectory: (remotePath: string) => Promise<DirectoryListResult>
   uploadFile: (localPath: string, remotePath: string) => Promise<TransferResult>
+  uploadDraggedFile: (
+    fileBuffer: ArrayBuffer,
+    fileName: string,
+    remotePath: string
+  ) => Promise<TransferResult>
   downloadFile: (
     remotePath: string,
     localPath: string,

@@ -103,6 +103,48 @@ app.whenReady().then(() => {
     }
   )
 
+  // 处理拖拽文件上传
+  ipcMain.handle(
+    'ftp:upload-dragged-file',
+    async (
+      _,
+      fileBuffer: ArrayBuffer,
+      fileName: string,
+      remotePath: string
+    ): Promise<TransferResult> => {
+      const os = await import('os')
+      const fs = await import('fs/promises')
+      const path = await import('path')
+
+      try {
+        // 创建临时文件
+        const tempDir = os.tmpdir()
+        const tempFilePath = path.join(tempDir, `drag_upload_${Date.now()}_${fileName}`)
+
+        // 将ArrayBuffer写入临时文件
+        await fs.writeFile(tempFilePath, Buffer.from(fileBuffer))
+
+        // 上传文件
+        const result = await ftpService.uploadFile(tempFilePath, remotePath)
+
+        // 清理临时文件
+        try {
+          await fs.unlink(tempFilePath)
+        } catch (error) {
+          console.warn('Failed to cleanup temp file:', error)
+        }
+
+        return result
+      } catch (error) {
+        return {
+          success: false,
+          transferId: `failed_${Date.now()}`,
+          error: error instanceof Error ? error.message : '未知错误'
+        }
+      }
+    }
+  )
+
   ipcMain.handle(
     'ftp:download-file',
     async (_, remotePath: string, localPath: string): Promise<TransferResult> => {
