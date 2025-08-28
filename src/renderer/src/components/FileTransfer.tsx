@@ -34,17 +34,17 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
   const getStatusText = (status: TransferItem['status']): string => {
     switch (status) {
       case 'pending':
-        return 'Waiting'
+        return '等待中'
       case 'uploading':
-        return 'Uploading'
+        return '上传中'
       case 'downloading':
-        return 'Downloading'
+        return '下载中'
       case 'completed':
-        return 'Completed'
+        return '已完成'
       case 'failed':
-        return 'Failed'
+        return '失败'
       default:
-        return 'Unknown'
+        return '未知'
     }
   }
 
@@ -90,7 +90,7 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
 
   const retryFailed = (): void => {
     // TODO: 实现重试失败的传输
-    console.log('Retry failed transfers')
+    console.log('重试失败的传输')
   }
 
   const removeItem = (id: string): void => {
@@ -106,9 +106,9 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
       <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-3">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">File Transfers</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">文件传输</h3>
             <span className="bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full text-xs font-medium">
-              {transfers.length} items
+              {transfers.length} 项
             </span>
           </div>
         </div>
@@ -118,14 +118,14 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
             disabled={completedCount === 0}
             className="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1 rounded-md text-sm transition-colors"
           >
-            Clear Completed
+            清除已完成
           </button>
           <button
             onClick={retryFailed}
             disabled={failedCount === 0}
             className="bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1 rounded-md text-sm transition-colors"
           >
-            Retry Failed
+            重试失败
           </button>
         </div>
       </div>
@@ -135,11 +135,9 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
         {transfers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">
             <div className="text-6xl mb-4 opacity-50">📁</div>
-            <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              No file transfers
-            </h4>
+            <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">暂无文件传输</h4>
             <p className="text-gray-600 dark:text-gray-400 text-sm">
-              Files will appear here when you start uploading or downloading
+              开始上传或下载时，文件将显示在此处
             </p>
           </div>
         ) : (
@@ -179,7 +177,7 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
                     <button
                       onClick={() => removeItem(item.id)}
                       className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 rounded transition-colors"
-                      title="Remove"
+                      title="移除"
                     >
                       ✕
                     </button>

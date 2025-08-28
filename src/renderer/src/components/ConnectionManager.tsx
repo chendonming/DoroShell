@@ -182,7 +182,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-700 dark:to-purple-700 text-white p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold">Connection Manager</h2>
+            <h2 className="text-2xl font-bold">连接管理器</h2>
             <button
               onClick={onClose}
               className="text-white hover:text-gray-200 p-2 rounded-md transition-colors"
@@ -196,14 +196,12 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
           {/* Connection List */}
           <div className="flex-1 p-6 border-r border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Saved Connections
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">已保存的连接</h3>
               <button
                 onClick={() => setShowForm(true)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
               >
-                + New Connection
+                + 新建连接
               </button>
             </div>
 
@@ -211,8 +209,8 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
               {savedConnections.length === 0 ? (
                 <div className="text-center text-gray-500 dark:text-gray-400 py-8">
                   <div className="text-4xl mb-2">🔌</div>
-                  <p>No saved connections</p>
-                  <p className="text-sm">Create a new connection to get started</p>
+                  <p>没有已保存的连接</p>
+                  <p className="text-sm">创建新连接以开始使用</p>
                 </div>
               ) : (
                 savedConnections.map((connection) => (
@@ -232,7 +230,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
                           {connection.username}@{connection.host}:{connection.port}
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-500">
-                          {connection.protocol.toUpperCase()} • Last used:{' '}
+                          {connection.protocol.toUpperCase()} • 最后使用:{' '}
                           {new Date(connection.lastUsed).toLocaleDateString()}
                         </div>
                       </div>
@@ -244,14 +242,14 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
                         <button
                           onClick={() => editConnection(connection)}
                           className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded transition-colors"
-                          title="Edit"
+                          title="编辑"
                         >
                           ✏️
                         </button>
                         <button
                           onClick={() => deleteConnection(connection.id)}
                           className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 rounded transition-colors"
-                          title="Delete"
+                          title="删除"
                         >
                           🗑️
                         </button>
@@ -268,7 +266,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
             <div className="w-96 p-6 bg-gray-50 dark:bg-gray-700">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {editingConnection ? 'Edit Connection' : 'New Connection'}
+                  {editingConnection ? '编辑连接' : '新建连接'}
                 </h3>
                 <button
                   onClick={resetForm}
@@ -287,14 +285,14 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
               >
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Connection Name *
+                    连接名称 *
                   </label>
                   <input
                     type="text"
                     value={formData.name || ''}
                     onChange={(e) => handleInputChange('name', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 transition-colors"
-                    placeholder="My FTP Server"
+                    placeholder="FTP 服务器"
                     required
                   />
                 </div>
@@ -302,7 +300,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Protocol
+                      协议
                     </label>
                     <select
                       value={formData.protocol || 'ftp'}
@@ -316,7 +314,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Port
+                      端口
                     </label>
                     <input
                       type="number"
@@ -331,42 +329,42 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Host *
+                    主机地址 *
                   </label>
                   <input
                     type="text"
                     value={formData.host || ''}
                     onChange={(e) => handleInputChange('host', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 transition-colors"
-                    placeholder="ftp.example.com"
+                    placeholder="ftp.example.com 或 192.168.1.100"
                     required
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Username *
+                    用户名 *
                   </label>
                   <input
                     type="text"
                     value={formData.username || ''}
                     onChange={(e) => handleInputChange('username', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 transition-colors"
-                    placeholder="username"
+                    placeholder="用户名"
                     required
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Password *
+                    密码 *
                   </label>
                   <input
                     type="password"
                     value={formData.password || ''}
                     onChange={(e) => handleInputChange('password', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 transition-colors"
-                    placeholder="Enter password"
+                    placeholder="请输入密码"
                     required
                   />
                 </div>
@@ -376,14 +374,14 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
                     type="submit"
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors"
                   >
-                    {editingConnection ? 'Update' : 'Save'}
+                    {editingConnection ? '更新' : '保存'}
                   </button>
                   <button
                     type="button"
                     onClick={resetForm}
                     className="flex-1 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-md transition-colors"
                   >
-                    Cancel
+                    取消
                   </button>
                 </div>
               </form>

@@ -204,7 +204,7 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
                         {connection.protocol.toUpperCase()})
                       </div>
                       <div className="text-xs text-gray-400 dark:text-gray-500">
-                        Last used: {new Date(connection.lastUsed).toLocaleDateString()}
+                        最后使用: {new Date(connection.lastUsed).toLocaleDateString()}
                       </div>
                     </div>
                     <button
@@ -213,7 +213,7 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
                         deleteSavedConnection(connection.id)
                       }}
                       className="text-red-400 hover:text-red-600 dark:hover:text-red-300 p-1 rounded transition-colors"
-                      title="Delete connection"
+                      title="删除连接"
                     >
                       🗑️
                     </button>
@@ -230,7 +230,7 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
               onClick={() => setShowSavedConnections(true)}
               className="w-full p-3 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
             >
-              📁 Show Saved Connections ({savedConnections.length})
+              📁 显示已保存的连接 ({savedConnections.length})
             </button>
           </div>
         )}
@@ -242,7 +242,7 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
                 htmlFor="protocol"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
               >
-                Protocol
+                协议
               </label>
               <select
                 id="protocol"
@@ -260,7 +260,7 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
                 htmlFor="port"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
               >
-                Port
+                端口
               </label>
               <input
                 type="number"
@@ -281,14 +281,14 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
               htmlFor="host"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
             >
-              Server Address
+              服务器地址
             </label>
             <input
               type="text"
               id="host"
               value={credentials.host}
               onChange={(e) => handleInputChange('host', e.target.value)}
-              placeholder="ftp.example.com"
+              placeholder="ftp.example.com 或 192.168.1.100"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               required
             />
@@ -299,14 +299,14 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
               htmlFor="username"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
             >
-              Username
+              用户名
             </label>
             <input
               type="text"
               id="username"
               value={credentials.username}
               onChange={(e) => handleInputChange('username', e.target.value)}
-              placeholder="your-username"
+              placeholder="请输入用户名"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               required
             />
@@ -317,14 +317,14 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
               htmlFor="password"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
             >
-              Password
+              密码
             </label>
             <input
               type="password"
               id="password"
               value={credentials.password}
               onChange={(e) => handleInputChange('password', e.target.value)}
-              placeholder="your-password"
+              placeholder="请输入密码"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               required
             />
@@ -344,7 +344,7 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
                 htmlFor="saveConnection"
                 className="ml-2 text-sm text-gray-700 dark:text-gray-300"
               >
-                Save this connection for quick access
+                保存此连接以便快速访问
               </label>
             </div>
 
@@ -354,7 +354,7 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
                   htmlFor="connectionName"
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
                 >
-                  Connection Name (optional)
+                  连接名称 (可选)
                 </label>
                 <input
                   type="text"
@@ -364,7 +364,7 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
                   placeholder={
                     credentials.username && credentials.host
                       ? `${credentials.username}@${credentials.host}`
-                      : 'My FTP Server'
+                      : 'FTP 服务器'
                   }
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 />
@@ -399,17 +399,17 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   ></path>
                 </svg>
-                Connecting...
+                正在连接...
               </div>
             ) : (
-              'Connect to Server'
+              '连接到服务器'
             )}
           </button>
         </form>
 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Make sure your FTP server is running and accessible
+            请确保您的 FTP 服务器正在运行且可访问
           </p>
         </div>
       </div>

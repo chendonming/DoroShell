@@ -14,7 +14,7 @@
 /* 允许在输入元素中选择文本 */
 input,
 textarea,
-[contenteditable="true"],
+[contenteditable='true'],
 .selectable {
   user-select: text;
 }

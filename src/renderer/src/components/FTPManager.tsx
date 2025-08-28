@@ -7,7 +7,7 @@ import type { FTPCredentials, TransferItem, TransferProgress } from '../../../ty
 
 const FTPManager: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState('Not connected')
+  const [connectionStatus, setConnectionStatus] = useState('未连接')
   const [currentServer, setCurrentServer] = useState<string>('')
   const [transfers, setTransfers] = useState<TransferItem[]>([])
   const [isDarkMode, setIsDarkMode] = useState(false)
@@ -58,20 +58,20 @@ const FTPManager: React.FC = () => {
         const credentials = await window.api.ftp.getCurrentCredentials()
         if (credentials) {
           setCurrentServer(`${credentials.username}@${credentials.host}`)
-          setConnectionStatus('Connected')
+          setConnectionStatus('已连接')
         }
       } else {
         setCurrentServer('')
-        setConnectionStatus('Not connected')
+        setConnectionStatus('未连接')
       }
     } catch (error) {
       console.error('Failed to check connection status:', error)
-      setConnectionStatus('Connection check failed')
+      setConnectionStatus('连接状态检查失败')
     }
   }
 
   const handleConnect = async (credentials: FTPCredentials): Promise<void> => {
-    setConnectionStatus('Connecting...')
+    setConnectionStatus('正在连接...')
 
     try {
       const result = await window.api.ftp.connect(credentials)
@@ -79,15 +79,15 @@ const FTPManager: React.FC = () => {
       if (result.success) {
         setIsConnected(true)
         setCurrentServer(`${credentials.username}@${credentials.host}`)
-        setConnectionStatus('Connected')
+        setConnectionStatus('已连接')
       } else {
         setIsConnected(false)
-        setConnectionStatus(result.error || 'Connection failed')
+        setConnectionStatus(result.error || '连接失败')
       }
     } catch (error) {
       console.error('Connection error:', error)
       setIsConnected(false)
-      setConnectionStatus('Connection failed')
+      setConnectionStatus('连接失败')
     }
   }
 
@@ -96,7 +96,7 @@ const FTPManager: React.FC = () => {
       await window.api.ftp.disconnect()
       setIsConnected(false)
       setCurrentServer('')
-      setConnectionStatus('Disconnected')
+      setConnectionStatus('已断开连接')
       setTransfers([])
     } catch (error) {
       console.error('Disconnect error:', error)
@@ -229,9 +229,9 @@ const FTPManager: React.FC = () => {
               <button
                 onClick={() => setShowConnectionManager(true)}
                 className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
-                title="Manage Connections"
+                title="管理连接"
               >
-                🔌 Connections
+                🔌 连接
               </button>
 
               <button
@@ -239,9 +239,9 @@ const FTPManager: React.FC = () => {
                 className={`${
                   showTransferPanel ? 'bg-white/30 border-white/50' : 'bg-white/20 border-white/30'
                 } hover:bg-white/30 text-white border px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2`}
-                title={showTransferPanel ? 'Hide Transfer Panel' : 'Show Transfer Panel'}
+                title={showTransferPanel ? '隐藏传输面板' : '显示传输面板'}
               >
-                {showTransferPanel ? '📤' : '📥'} Transfers{' '}
+                {showTransferPanel ? '📤' : '📥'} 传输{' '}
                 {transfers.length > 0 && `(${transfers.length})`}
               </button>
             </div>
@@ -269,7 +269,7 @@ const FTPManager: React.FC = () => {
             <button
               onClick={toggleDarkMode}
               className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
-              title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              title={isDarkMode ? '切换到浅色模式' : '切换到深色模式'}
             >
               {isDarkMode ? '☀️' : '🌙'}
             </button>
@@ -280,7 +280,7 @@ const FTPManager: React.FC = () => {
                 onClick={handleDisconnect}
                 className="bg-red-500/80 hover:bg-red-600 text-white border border-red-400 px-3 py-2 rounded-md transition-colors duration-200"
               >
-                Disconnect
+                断开连接
               </button>
             )}
           </div>
@@ -317,16 +317,16 @@ const FTPManager: React.FC = () => {
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
               <div className="text-6xl mb-4 opacity-50">🌐</div>
               <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">
-                No FTP Connection
+                暂无 FTP 连接
               </h3>
               <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                Connect to an FTP server to browse remote files
+                连接到 FTP 服务器以浏览远程文件
               </p>
               <button
                 onClick={() => setShowConnectionManager(true)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
               >
-                Manage Connections
+                管理连接
               </button>
             </div>
           )}

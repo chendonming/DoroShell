@@ -445,7 +445,7 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
         ) : files.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-gray-500 dark:text-gray-400">
             <span className="text-4xl mb-2">📂</span>
-            <span>This directory is empty</span>
+            <span>此目录为空</span>
           </div>
         ) : (
           <div onContextMenu={(e) => handleContextMenu(e)}>

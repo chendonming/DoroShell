@@ -210,14 +210,14 @@ const RemoteFileExplorer: React.FC<RemoteFileExplorerProps> = ({ onAddTransfer }
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <span className="text-lg">🌐</span>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Remote Files</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">远程文件</h2>
           </div>
           {selectedFiles.size > 0 && (
             <button
               onClick={downloadSelectedFiles}
               className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-sm transition-colors duration-200 flex items-center gap-2"
             >
-              ⬇️ Download ({selectedFiles.size})
+              ⬇️ 下载 ({selectedFiles.size})
             </button>
           )}
         </div>
@@ -229,7 +229,7 @@ const RemoteFileExplorer: React.FC<RemoteFileExplorerProps> = ({ onAddTransfer }
             disabled={remotePath === '/'}
             className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 px-2 py-1 rounded text-sm transition-colors duration-200"
           >
-            ⬆️ Up
+            ⬆️ 上级
           </button>
           <div className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 font-mono">
             {remotePath}
@@ -249,12 +249,12 @@ const RemoteFileExplorer: React.FC<RemoteFileExplorerProps> = ({ onAddTransfer }
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin text-2xl">⟳</div>
-            <span className="ml-2 text-gray-600 dark:text-gray-400">Loading...</span>
+            <span className="ml-2 text-gray-600 dark:text-gray-400">加载中...</span>
           </div>
         ) : files.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-gray-500 dark:text-gray-400">
             <span className="text-4xl mb-2">📂</span>
-            <span>This directory is empty</span>
+            <span>此目录为空</span>
           </div>
         ) : (
           <table className="w-full">
@@ -278,16 +278,16 @@ const RemoteFileExplorer: React.FC<RemoteFileExplorerProps> = ({ onAddTransfer }
                       }
                     }}
                   />
-                  Name
+                  名称
                 </th>
                 <th className="text-left p-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-                  Size
+                  大小
                 </th>
                 <th className="text-left p-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-                  Modified
+                  修改时间
                 </th>
                 <th className="text-left p-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-                  Permissions
+                  权限
                 </th>
               </tr>
             </thead>

@@ -118,7 +118,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onAddTransfer }) => {
               onClick={() => fileInputRef.current?.click()}
               className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm transition-colors"
             >
-              Upload Files
+              上传文件
             </button>
           )}
         </div>
@@ -128,7 +128,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onAddTransfer }) => {
             value={path}
             onChange={(e) => onPathChange(e.target.value)}
             className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono"
-            placeholder="Enter path..."
+            placeholder="输入路径..."
           />
           <button className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 px-3 py-2 rounded-md text-sm transition-colors">
             ↑
@@ -144,13 +144,13 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onAddTransfer }) => {
           <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
             <tr>
               <th className="text-left p-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-                Name
+                名称
               </th>
               <th className="text-left p-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-                Size
+                大小
               </th>
               <th className="text-left p-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-                Modified
+                修改时间
               </th>
             </tr>
           </thead>
