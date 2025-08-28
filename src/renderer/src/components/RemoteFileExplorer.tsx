@@ -1,4 +1,6 @@
 import { useState, useEffect, useImperativeHandle, forwardRef, useCallback, useRef } from 'react'
+import type { PathInputHandle } from './PathInput'
+import { notify } from './Notification'
 import type { TransferItem } from '../../../types'
 import PathInput from './PathInput'
 import ContextMenu from './ContextMenu'
@@ -46,6 +48,9 @@ interface DragState {
 const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerProps>(
   ({ onAddTransfer }, ref) => {
     const [remotePath, setRemotePath] = useState('/')
+    const pathInputRef = useRef<PathInputHandle | null>(null)
+    // 输入框的临时值，只有在用户按 Enter 或选择历史项时才触发真正的导航和目录刷新
+    const [inputPath, setInputPath] = useState('/')
     const [files, setFiles] = useState<RemoteFileItem[]>([])
     const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
     const [loading, setLoading] = useState(false)
@@ -115,6 +120,9 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     )
 
     useEffect(() => {
+      // 确保输入框与实际 remotePath 同步（例如初始或服务器恢复后）
+      setInputPath(remotePath)
+
       // Load remote files when path changes
       const loadFiles = async (): Promise<void> => {
         setLoading(true)
@@ -156,20 +164,64 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     }, [remotePath])
 
     const navigateToPath = async (newPath: string): Promise<void> => {
-      if (newPath !== remotePath) {
-        try {
-          // 使用FTP changeDirectory API
-          const result = await window.api.ftp.changeDirectory(newPath)
-          if (result.success) {
-            setRemotePath(newPath)
-            setSelectedFiles(new Set())
-          } else {
-            console.error('无法切换到目录:', newPath, result.error)
-            alert('无法访问指定路径')
+      try {
+        // 始终尝试切换目录，确保与服务器状态同步
+        const result = await window.api.ftp.changeDirectory(newPath)
+        if (result.success) {
+          // 使用服务器返回的 currentPath（如果有）以避免路径格式差异
+          const updatedPath = result.currentPath || newPath
+          setRemotePath(updatedPath)
+          // 同步输入框显示为服务器返回的路径
+          setInputPath(updatedPath)
+          setSelectedFiles(new Set())
+          // 保存到历史（仅保存有效路径）
+          try {
+            const key = `pathHistory_remote`
+            const saved = localStorage.getItem(key)
+            const arr = saved ? JSON.parse(saved) : []
+            const newArr = [updatedPath, ...arr.filter((p: string) => p !== updatedPath)].slice(
+              0,
+              50
+            )
+            localStorage.setItem(key, JSON.stringify(newArr))
+            // 刷新 PathInput 历史展示
+            try {
+              pathInputRef.current?.refresh?.()
+            } catch {
+              // ignore
+            }
+          } catch (e) {
+            console.error('保存历史失败', e)
           }
-        } catch (error) {
-          console.error('切换目录失败:', error)
-          alert('切换目录失败')
+        } else {
+          console.error('无法切换到目录:', newPath, result.error)
+          // 切换失败时，若服务端返回了当前路径则恢复本地显示，避免被卡在不可访问的路径
+          if (result.currentPath) {
+            setRemotePath(result.currentPath)
+          }
+          notify('无法访问指定路径', 'error')
+          // alert 可能会导致输入丢失焦点，尝试恢复 PathInput 聚焦
+          try {
+            pathInputRef.current?.focus?.()
+          } catch {
+            // ignore
+          }
+        }
+      } catch (error) {
+        console.error('切换目录失败:', error)
+        notify('切换目录失败', 'error')
+        // 出现异常时尝试从服务端获取当前路径并同步本地状态
+        try {
+          const serverPath = await window.api.ftp.getCurrentPath()
+          if (serverPath) setRemotePath(serverPath)
+        } catch {
+          // 忽略获取路径失败的错误
+        }
+        // 并尝试恢复 PathInput 聚焦
+        try {
+          pathInputRef.current?.focus?.()
+        } catch {
+          // ignore
         }
       }
     }
@@ -415,7 +467,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
               if (result.success) {
                 await loadRemoteFiles()
               } else {
-                alert('创建目录失败: ' + result.error)
+                notify('创建目录失败: ' + result.error, 'error')
               }
             }
             break
@@ -430,7 +482,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
                 if (result.success) {
                   await loadRemoteFiles()
                 } else {
-                  alert('重命名失败: ' + result.error)
+                  notify('重命名失败: ' + result.error, 'error')
                 }
               }
             }
@@ -438,7 +490,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
         }
       } catch (err) {
         console.error('操作失败', err)
-        alert('操作失败')
+        notify('操作失败', 'error')
       } finally {
         setPromptDialog({
           visible: false,
@@ -490,7 +542,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       items.push({
         label: '创建文件',
         action: () => {
-          alert('远程创建文件暂不支持')
+          notify('远程创建文件暂不支持', 'info')
           closeContextMenu()
         },
         icon: '📄'
@@ -526,7 +578,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
               action: 'rename'
             })
           } else {
-            alert('请选择目标重命名项')
+            notify('请选择目标重命名项', 'info')
           }
         },
         disabled: !canModify,
@@ -546,7 +598,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             }
 
             if (targets.length === 0) {
-              alert('请选择要删除的文件')
+              notify('请选择要删除的文件', 'info')
               closeContextMenu()
               return
             }
@@ -561,7 +613,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
               if (!resFile.success) {
                 const resDir = await window.api.ftp.deleteDirectory(path)
                 if (!resDir.success) {
-                  alert(`删除 ${t} 失败`)
+                  notify(`删除 ${t} 失败`, 'error')
                 }
               }
             }
@@ -569,7 +621,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             await loadRemoteFiles()
           } catch (err) {
             console.error('删除失败', err)
-            alert('删除失败')
+            notify('删除失败', 'error')
           } finally {
             closeContextMenu()
           }
@@ -597,7 +649,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             }
 
             if (targets.length === 0) {
-              alert('请选择要下载的文件')
+              notify('请选择要下载的文件', 'info')
               return
             }
 
@@ -611,7 +663,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             }
           } catch (err) {
             console.error('下载失败', err)
-            alert('下载失败')
+            notify('下载失败', 'error')
           } finally {
             closeContextMenu()
           }
@@ -756,9 +808,10 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
               ⬆️ 上级
             </button>
             <PathInput
-              value={remotePath}
-              onChange={setRemotePath}
+              value={inputPath}
+              onChange={setInputPath}
               onNavigate={navigateToPath}
+              ref={pathInputRef}
               placeholder="输入远程路径..."
               historyKey="remote"
               className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"

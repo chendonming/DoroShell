@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { notify } from './Notification'
 import type { FTPCredentials, SavedFTPConnection } from '../../../types'
 
 interface ConnectionManagerProps {
@@ -59,7 +60,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
 
   const saveConnection = (): void => {
     if (!formData.name || !formData.host || !formData.username || !formData.password) {
-      alert('Please fill in all required fields including password')
+      notify('Please fill in all required fields including password', 'info')
       return
     }
 
@@ -93,7 +94,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
       resetForm()
     } catch (error) {
       console.error('Failed to save connection:', error)
-      alert('Failed to save connection')
+      notify('Failed to save connection', 'error')
     }
   }
 
@@ -146,8 +147,9 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
       onClose()
     } catch (error) {
       console.error('Connection failed:', error)
-      window.alert(
-        `Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease check your credentials and try again.`
+      notify(
+        `Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease check your credentials and try again.`,
+        'error'
       )
     } finally {
       setIsConnecting(null)

@@ -3,6 +3,8 @@ import type { TransferItem } from '../../../types'
 import ContextMenu from './ContextMenu'
 import PromptDialog from './PromptDialog'
 import PathInput from './PathInput'
+import { notify } from './Notification'
+import type { PathInputHandle } from './PathInput'
 
 interface LocalFileExplorerProps {
   onAddTransfer: (transfer: TransferItem) => void
@@ -23,6 +25,9 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
 }) => {
   const [files, setFiles] = useState<FileItem[]>([])
   const [currentPath, setCurrentPath] = useState<string>('')
+  const [inputPath, setInputPath] = useState<string>('')
+  const pathInputRef = React.useRef<PathInputHandle | null>(null)
+  // 输入框临时值，只有在用户按 Enter 或选择历史项时才触发真正的导航
   const [loading, setLoading] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
 
@@ -61,6 +66,21 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
     (newPath: string): void => {
       setCurrentPath(newPath)
       onCurrentPathChange(newPath)
+      // 保存到历史并刷新 PathInput
+      try {
+        const key = `pathHistory_local`
+        const saved = localStorage.getItem(key)
+        const arr = saved ? JSON.parse(saved) : []
+        const newArr = [newPath, ...arr.filter((p: string) => p !== newPath)].slice(0, 50)
+        localStorage.setItem(key, JSON.stringify(newArr))
+        try {
+          pathInputRef.current?.refresh?.()
+        } catch {
+          // ignore
+        }
+      } catch (e) {
+        console.error('保存本地历史失败', e)
+      }
     },
     [onCurrentPathChange]
   )
@@ -83,6 +103,11 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
     if (currentPath) {
       loadDirectory(currentPath)
     }
+  }, [currentPath])
+
+  // 当 currentPath 变化时同步输入框显示
+  useEffect(() => {
+    setInputPath(currentPath)
   }, [currentPath])
 
   // 当文件列表更新且有新创建的项目时，自动定位到该项目
@@ -186,11 +211,21 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
       if (result.success) {
         updateCurrentPath(newPath)
       } else {
-        alert('路径不存在或无法访问')
+        notify('路径不存在或无法访问', 'error')
+        try {
+          pathInputRef.current?.focus?.()
+        } catch {
+          // ignore
+        }
       }
     } catch (error) {
       console.error('Failed to navigate to path:', error)
-      alert('无法访问指定路径')
+      notify('无法访问指定路径', 'error')
+      try {
+        pathInputRef.current?.focus?.()
+      } catch {
+        // ignore
+      }
     }
   }
 
@@ -262,7 +297,7 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
     }
 
     if (filesToDelete.length === 0) {
-      alert('请选择要删除的文件')
+      notify('请选择要删除的文件', 'info')
       return
     }
 
@@ -283,14 +318,14 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
           const result = await window.api.fs.deleteDirectory(fullPath)
           console.log('[Renderer] deleteDirectory result ->', { fullPath, result })
           if (!result.success) {
-            alert(`删除文件夹 "${fileName}" 失败: ${result.error}`)
+            notify(`删除文件夹 "${fileName}" 失败: ${result.error}`, 'error')
             continue
           }
         } else {
           const result = await window.api.fs.deleteFile(fullPath)
           console.log('[Renderer] deleteFile result ->', { fullPath, result })
           if (!result.success) {
-            alert(`删除文件 "${fileName}" 失败: ${result.error}`)
+            notify(`删除文件 "${fileName}" 失败: ${result.error}`, 'error')
             continue
           }
         }
@@ -301,7 +336,7 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
       handleRefresh()
     } catch (error) {
       console.error('删除操作失败:', error)
-      alert('删除失败')
+      notify('删除失败', 'error')
     }
   }
 
@@ -343,7 +378,7 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
               setNewlyCreatedItem(value)
               handleRefresh()
             } else {
-              alert('创建文件失败: ' + result.error)
+              notify('创建文件失败: ' + result.error, 'error')
             }
           }
           break
@@ -355,7 +390,7 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
               setNewlyCreatedItem(value)
               handleRefresh()
             } else {
-              alert('创建文件夹失败: ' + result.error)
+              notify('创建文件夹失败: ' + result.error, 'error')
             }
           }
           break
@@ -379,7 +414,7 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                 setNewlyCreatedItem(value) // 定位到重命名后的文件
                 handleRefresh()
               } else {
-                alert('重命名失败: ' + result.error)
+                notify('重命名失败: ' + result.error, 'error')
               }
             }
           }
@@ -387,7 +422,7 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
       }
     } catch (error) {
       console.error('操作失败:', error)
-      alert('操作失败')
+      notify('操作失败', 'error')
     }
 
     setPromptDialog({ visible: false, title: '', placeholder: '', defaultValue: '', action: '' })
@@ -465,43 +500,52 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
       {/* Header */}
       <div className="border-b border-gray-200 dark:border-gray-700 p-3">
         <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">本地文件</h2>
-        <div className="mt-2 flex items-center justify-between space-x-2">
-          <div className="flex items-center flex-1 space-x-2">
-            <PathInput
-              value={currentPath}
-              onChange={setCurrentPath}
-              onNavigate={handlePathNavigation}
-              placeholder="输入本地路径..."
-              historyKey="local"
-              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
-              onClick={handleRefresh}
-              title="刷新"
-            >
-              🔄 刷新
-            </button>
-            <button
-              className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
-              onClick={async () => {
-                try {
-                  const result = await window.api.path.showItemInFolder(currentPath)
-                  if (!result || !result.success) {
-                    alert('在系统中打开失败: ' + (result?.error || '未知错误'))
-                  }
-                } catch (error) {
-                  console.error('打开文件管理器失败:', error)
-                  alert('打开文件管理器失败')
+        <div className="mt-2 flex items-center space-x-2">
+          <button
+            onClick={() => {
+              if (currentPath && currentPath !== '/') {
+                const parent = currentPath.split(/[/\\]/).slice(0, -1).join('/') || '/'
+                updateCurrentPath(parent)
+              }
+            }}
+            disabled={!currentPath || currentPath === '/'}
+            className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 px-2 py-1 rounded text-sm transition-colors duration-200"
+          >
+            ⬆️ 上级
+          </button>
+          <PathInput
+            value={inputPath}
+            onChange={setInputPath}
+            onNavigate={handlePathNavigation}
+            placeholder="输入本地路径..."
+            historyKey="local"
+            ref={pathInputRef}
+            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 px-2 py-1 rounded text-sm transition-colors duration-200"
+          >
+            {loading ? '⟳' : '🔄'}
+          </button>
+          <button
+            className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+            onClick={async () => {
+              try {
+                const result = await window.api.path.showItemInFolder(currentPath)
+                if (!result || !result.success) {
+                  notify('在系统中打开失败: ' + (result?.error || '未知错误'), 'error')
                 }
-              }}
-              title="在系统中打开"
-            >
-              📂 在系统中打开
-            </button>
-          </div>
+              } catch (error) {
+                console.error('打开文件管理器失败:', error)
+                notify('打开文件管理器失败', 'error')
+              }
+            }}
+            title="在系统中打开"
+          >
+            📂 在系统中打开
+          </button>
         </div>
       </div>
 

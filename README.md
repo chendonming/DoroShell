@@ -128,7 +128,7 @@ src/
 
 需要在仓库的 Secrets 中配置以下变量（通过 Settings → Secrets → Actions 添加）：
 
-- `GITHUB_TOKEN`：Actions 自动提供，通常不需要手动设置。用于创建 Release。 
+- `GITHUB_TOKEN`：Actions 自动提供，通常不需要手动设置。用于创建 Release。
 - `CSC_LINK`：可选，代码签名证书的远程下载链接（用于 macOS/Windows 签名）。
 - `CSC_KEY_PASSWORD`：可选，代码签名证书密码。
 
