@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     name: Build and package
+  permissions:
+    contents: write
     strategy:
       matrix:
         node-version: [20]
@@ -49,12 +51,13 @@ jobs:
         run: |
           # build renderer/node then package without auto-publish
           npm run build
-          npx electron-builder --win --x64 --publish=never
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-assets-windows
+        - name: Upload artifacts (Windows)
+          uses: actions/upload-artifact@v4
+          with:
+            name: release-assets-windows
+            path: |
+              dist/**
+              out/**
           path: |
             dist/**
 
@@ -65,13 +68,17 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
     steps:
       - name: Download windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: release-assets-windows
-
-      - name: Gather dist files
-        run: |
-          echo "Collecting dist/** files into release_artifacts/"
+        - name: Gather dist files
+          run: |
+            echo "Collecting dist/** files into release_artifacts/"
+            mkdir -p release_artifacts
+            # copy any dist or out files produced by Windows build
+            if [ -d windows_artifacts ]; then
+              find windows_artifacts -type f -path '*/dist/*' -exec cp --parents {} release_artifacts/ \; || true
+              find windows_artifacts -type f -path '*/out/*' -exec cp --parents {} release_artifacts/ \; || true
+            fi
+            echo "Collected files:"
+            find release_artifacts -maxdepth 5 -type f -print || true
           mkdir -p release_artifacts
           cp -r ./*/dist/* release_artifacts/ 2>/dev/null || true
           echo "Collected files:"
