@@ -34,21 +34,27 @@ jobs:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: |
-          npm run build:win || npm run build
+          # build renderer/node then package without auto-publish
+          npm run build
+          npx electron-builder --win --x64 --publish=never
 
       - name: Package (macOS)
         if: matrix.os == 'macos-latest'
-        run: npm run build:mac || npm run build
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          npm run build
+          npx electron-builder --mac --x64 --publish=never
 
       - name: Package (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: npm run build:linux || npm run build
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          npm run build
+          npx electron-builder --linux --x64 --publish=never
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
