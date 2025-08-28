@@ -2,13 +2,35 @@ param(
   [string]$Version = ''
 )
 
-# Determine version
+# Determine base version and compute next beta number
 if (-not $Version -or $Version -eq '') {
-  $pkg = Join-Path $PSScriptRoot '..\package.json' | Resolve-Path -Relative
-  $json = Get-Content (Join-Path $PSScriptRoot '..\package.json') -Raw | ConvertFrom-Json
+  $pkgPath = Join-Path $PSScriptRoot '..\package.json'
+  $json = Get-Content $pkgPath -Raw | ConvertFrom-Json
   $base = $json.version
-  $timestamp = (Get-Date -Format "yyyyMMddHHmm")
-  $Version = "$base-beta.$timestamp"
+
+  # Fetch tags from remote to compute next beta number
+  Write-Host "Fetching tags from origin..."
+  git fetch --tags origin
+
+  $pattern = "^v" + [regex]::Escape($base) + "-beta\.(\d+)$"
+  $tags = git ls-remote --tags origin | ForEach-Object {
+    $_ -split '\t' | Select-Object -Last 1
+  }
+
+  $max = 0
+  foreach ($t in $tags) {
+    if ($t -match $pattern) {
+      $n = [int]$Matches[1]
+      if ($n -gt $max) { $max = $n }
+    }
+  }
+  $next = $max + 1
+  $Version = "$base-beta.$next"
+} else {
+  # If user supplied explicit version e.g. 1.2.3, start at beta.1
+  if ($Version -match '^\d+\.\d+\.\d+$') {
+    $Version = "$Version-beta.1"
+  }
 }
 
 Write-Host "Preparing release tag: v$Version"
