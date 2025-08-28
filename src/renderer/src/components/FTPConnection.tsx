@@ -39,14 +39,13 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
 
   const saveConnectionToStorage = (creds: FTPCredentials, name: string): void => {
     try {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      //@ts-expect-error
       const newConnection: SavedFTPConnection = {
         id: Date.now().toString(),
         name: name || `${creds.username}@${creds.host}`,
         host: creds.host,
         port: creds.port,
         username: creds.username,
+        password: creds.password, // 保存密码以便一键登录
         protocol: creds.protocol,
         lastUsed: new Date().toISOString()
       }
@@ -87,7 +86,7 @@ const FTPConnection: React.FC<FTPConnectionProps> = ({ onConnect }) => {
         host: connection.host,
         port: connection.port,
         username: connection.username,
-        password: '', // 密码需要重新输入
+        password: connection.password, // 加载保存的密码
         protocol: connection.protocol
       })
       setSelectedConnectionId(connectionId)
