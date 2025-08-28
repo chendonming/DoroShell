@@ -460,15 +460,43 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
       {/* Header */}
       <div className="border-b border-gray-200 dark:border-gray-700 p-3">
         <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">本地文件</h2>
-        <div className="mt-2">
-          <PathInput
-            value={currentPath}
-            onChange={setCurrentPath}
-            onNavigate={handlePathNavigation}
-            placeholder="输入本地路径..."
-            historyKey="local"
-            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+        <div className="mt-2 flex items-center justify-between space-x-2">
+          <div className="flex items-center flex-1 space-x-2">
+            <PathInput
+              value={currentPath}
+              onChange={setCurrentPath}
+              onNavigate={handlePathNavigation}
+              placeholder="输入本地路径..."
+              historyKey="local"
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+              onClick={handleRefresh}
+              title="刷新"
+            >
+              🔄 刷新
+            </button>
+            <button
+              className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+              onClick={async () => {
+                try {
+                  const result = await window.api.path.showItemInFolder(currentPath)
+                  if (!result || !result.success) {
+                    alert('在系统中打开失败: ' + (result?.error || '未知错误'))
+                  }
+                } catch (error) {
+                  console.error('打开文件管理器失败:', error)
+                  alert('打开文件管理器失败')
+                }
+              }}
+              title="在系统中打开"
+            >
+              📂 在系统中打开
+            </button>
+          </div>
         </div>
       </div>
 

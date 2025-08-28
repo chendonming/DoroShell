@@ -102,7 +102,10 @@ const api: ElectronAPI = {
 
     resolvePath: (path: string): Promise<string> => ipcRenderer.invoke('path:resolve-path', path),
 
-    getDownloadsPath: (): Promise<string> => ipcRenderer.invoke('path:get-downloads-path')
+    getDownloadsPath: (): Promise<string> => ipcRenderer.invoke('path:get-downloads-path'),
+    // 在系统文件管理器中显示指定路径
+    showItemInFolder: (path: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('path:show-item-in-folder', path)
   }
 }
 

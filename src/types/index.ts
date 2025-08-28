@@ -110,6 +110,8 @@ export interface PathAPI {
   joinPath: (...paths: string[]) => Promise<string>
   resolvePath: (path: string) => Promise<string>
   getDownloadsPath: () => Promise<string>
+  // 在系统文件管理器中显示/打开指定路径
+  showItemInFolder: (path: string) => Promise<{ success: boolean; error?: string }>
 }
 
 // IPC通信的FTP API类型

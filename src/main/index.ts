@@ -376,6 +376,31 @@ app.whenReady().then(() => {
     return join(homedir(), 'Downloads')
   })
 
+  // 在系统文件管理器中显示指定路径
+  ipcMain.handle('path:show-item-in-folder', async (_, targetPath: string) => {
+    try {
+      // shell.showItemInFolder 在系统文件管理器中高亮显示指定路径（返回 void）
+      shell.showItemInFolder(targetPath)
+      return { success: true }
+    } catch (error) {
+      console.warn(
+        '[IPC] shell.showItemInFolder failed, fallback to openPath ->',
+        targetPath,
+        error
+      )
+      try {
+        const openResult = await shell.openPath(targetPath)
+        if (!openResult) {
+          return { success: true }
+        }
+        return { success: false, error: openResult }
+      } catch (err) {
+        console.error('[IPC] path:show-item-in-folder failed ->', targetPath, err)
+        return { success: false, error: err instanceof Error ? err.message : '打开路径失败' }
+      }
+    }
+  })
+
   createWindow()
 
   app.on('activate', function () {
