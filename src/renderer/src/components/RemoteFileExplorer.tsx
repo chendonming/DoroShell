@@ -1,6 +1,16 @@
-import { useState, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react'
+import { useState, useEffect, useImperativeHandle, forwardRef, useCallback, useRef } from 'react'
 import type { TransferItem } from '../../../types'
 import PathInput from './PathInput'
+import ContextMenu from './ContextMenu'
+import PromptDialog from './PromptDialog'
+// 本地上下文菜单项类型（与 ContextMenu.tsx 中定义的接口保持同步）
+type CtxItem = {
+  label?: string
+  action?: () => void
+  disabled?: boolean
+  separator?: boolean
+  icon?: string
+}
 
 interface RemoteFileItem {
   name: string
@@ -48,6 +58,12 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     const [overwriteAction, setOverwriteAction] = useState<
       'yes' | 'no' | 'yesToAll' | 'noToAll' | null
     >(null)
+    // Context menu state
+    const [ctxVisible, setCtxVisible] = useState(false)
+    const [ctxX, setCtxX] = useState(0)
+    const [ctxY, setCtxY] = useState(0)
+    const [ctxItems, setCtxItems] = useState<CtxItem[]>([])
+    const ctxTargetRef = useRef<RemoteFileItem | null>(null)
 
     const loadRemoteFiles = useCallback(async (): Promise<void> => {
       setLoading(true)
@@ -363,6 +379,256 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       }
     }
 
+    // Prompt dialog state (复用项目内 PromptDialog 以保持 UI 风格一致)
+    const [promptDialog, setPromptDialog] = useState<{
+      visible: boolean
+      title: string
+      placeholder: string
+      defaultValue: string
+      action: string
+    }>({
+      visible: false,
+      title: '',
+      placeholder: '',
+      defaultValue: '',
+      action: ''
+    })
+
+    const handlePromptConfirm = async (value: string): Promise<void> => {
+      const { action } = promptDialog
+      try {
+        switch (action) {
+          case 'createDirectory':
+            {
+              const result = await window.api.ftp.createDirectory(
+                remotePath === '/' ? `/${value}` : `${remotePath}/${value}`
+              )
+              if (result.success) {
+                await loadRemoteFiles()
+              } else {
+                alert('创建目录失败: ' + result.error)
+              }
+            }
+            break
+          case 'rename':
+            {
+              const target = ctxTargetRef.current
+              if (target) {
+                const oldPath =
+                  remotePath === '/' ? `/${target.name}` : `${remotePath}/${target.name}`
+                const newPath = remotePath === '/' ? `/${value}` : `${remotePath}/${value}`
+                const result = await window.api.ftp.renameFile(oldPath, newPath)
+                if (result.success) {
+                  await loadRemoteFiles()
+                } else {
+                  alert('重命名失败: ' + result.error)
+                }
+              }
+            }
+            break
+        }
+      } catch (err) {
+        console.error('操作失败', err)
+        alert('操作失败')
+      } finally {
+        setPromptDialog({
+          visible: false,
+          title: '',
+          placeholder: '',
+          defaultValue: '',
+          action: ''
+        })
+        closeContextMenu()
+      }
+    }
+
+    const handlePromptCancel = (): void => {
+      setPromptDialog({ visible: false, title: '', placeholder: '', defaultValue: '', action: '' })
+      closeContextMenu()
+    }
+
+    const getContextMenuItems = (): CtxItem[] => {
+      const canModify = !!ctxTargetRef.current || selectedFiles.size > 0
+      const hasSelectedFiles = selectedFiles.size > 0
+
+      const items: CtxItem[] = [
+        {
+          label: '刷新',
+          action: async () => {
+            try {
+              await loadRemoteFiles()
+            } finally {
+              closeContextMenu()
+            }
+          },
+          icon: '🔄'
+        },
+        {
+          label: '复制路径',
+          action: () => {
+            navigator.clipboard
+              .writeText(remotePath)
+              .then(() => console.log('路径已复制'))
+              .catch((e) => console.error('复制失败', e))
+            closeContextMenu()
+          },
+          icon: '📋'
+        },
+        { separator: true }
+      ]
+
+      // 保持与本地资源管理器一致：创建文件（远程可能不支持，提示）
+      items.push({
+        label: '创建文件',
+        action: () => {
+          alert('远程创建文件暂不支持')
+          closeContextMenu()
+        },
+        icon: '📄'
+      })
+
+      // 创建目录（远程）
+      items.push({
+        label: '创建文件夹',
+        action: () => {
+          setPromptDialog({
+            visible: true,
+            title: '创建远程文件夹',
+            placeholder: '请输入文件夹名',
+            defaultValue: '',
+            action: 'createDirectory'
+          })
+        },
+        icon: '📁'
+      })
+
+      items.push({ separator: true })
+
+      items.push({
+        label: '重命名',
+        action: () => {
+          const target = ctxTargetRef.current
+          if (target) {
+            setPromptDialog({
+              visible: true,
+              title: '重命名',
+              placeholder: '请输入新名称',
+              defaultValue: target.name,
+              action: 'rename'
+            })
+          } else {
+            alert('请选择目标重命名项')
+          }
+        },
+        disabled: !canModify,
+        icon: '✏️'
+      })
+
+      items.push({
+        label: '删除',
+        action: async () => {
+          try {
+            // 删除同 LocalFileExplorer 行为
+            let targets: string[] = []
+            if (ctxTargetRef.current) {
+              targets = [ctxTargetRef.current.name]
+            } else if (selectedFiles.size > 0) {
+              targets = Array.from(selectedFiles)
+            }
+
+            if (targets.length === 0) {
+              alert('请选择要删除的文件')
+              closeContextMenu()
+              return
+            }
+
+            const ok = confirm(`确定要删除 "${targets.join('、')}" 吗？`)
+            if (!ok) return
+
+            for (const t of targets) {
+              const path = remotePath === '/' ? `/${t}` : `${remotePath}/${t}`
+              // 先尝试删除为文件，否则删除目录
+              const resFile = await window.api.ftp.deleteFile(path)
+              if (!resFile.success) {
+                const resDir = await window.api.ftp.deleteDirectory(path)
+                if (!resDir.success) {
+                  alert(`删除 ${t} 失败`)
+                }
+              }
+            }
+
+            await loadRemoteFiles()
+          } catch (err) {
+            console.error('删除失败', err)
+            alert('删除失败')
+          } finally {
+            closeContextMenu()
+          }
+        },
+        disabled: !canModify,
+        icon: '🗑️'
+      })
+
+      items.push({ separator: true })
+
+      // 下载（替代本地的上传）
+      items.push({
+        label: '下载',
+        action: async () => {
+          try {
+            // 如果有选中项，则下载选中项；否则下载 ctxTarget
+            const targets: RemoteFileItem[] = []
+            if (selectedFiles.size > 0) {
+              for (const name of selectedFiles) {
+                const f = files.find((x) => x.name === name)
+                if (f && f.type === 'file') targets.push(f)
+              }
+            } else if (ctxTargetRef.current) {
+              if (ctxTargetRef.current.type === 'file') targets.push(ctxTargetRef.current)
+            }
+
+            if (targets.length === 0) {
+              alert('请选择要下载的文件')
+              return
+            }
+
+            for (const f of targets) {
+              await onAddTransfer({
+                filename: f.name,
+                size: f.size,
+                type: 'download',
+                remotePath: remotePath === '/' ? `/${f.name}` : `${remotePath}/${f.name}`
+              })
+            }
+          } catch (err) {
+            console.error('下载失败', err)
+            alert('下载失败')
+          } finally {
+            closeContextMenu()
+          }
+        },
+        disabled: !hasSelectedFiles && !ctxTargetRef.current,
+        icon: '⬇️'
+      })
+
+      return items
+    }
+
+    const handleContextMenu = (e: React.MouseEvent, file?: RemoteFileItem): void => {
+      e.preventDefault()
+      e.stopPropagation()
+      ctxTargetRef.current = file || null
+      setCtxX(e.clientX)
+      setCtxY(e.clientY)
+      setCtxItems(getContextMenuItems())
+      setCtxVisible(true)
+    }
+
+    const closeContextMenu = (): void => {
+      setCtxVisible(false)
+      ctxTargetRef.current = null
+    }
+
     const handleFileSelection = (filePath: string, isSelected: boolean): void => {
       const newSelection = new Set(selectedFiles)
       if (isSelected) {
@@ -499,7 +765,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
         </div>
 
         {/* File List */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto" onContextMenu={(e) => handleContextMenu(e)}>
           {loading ? (
             <div className="flex items-center justify-center h-32">
               <div className="animate-spin text-2xl">⟳</div>
@@ -550,6 +816,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
                   <tr
                     key={file.name}
                     onDoubleClick={() => handleDoubleClick(file)}
+                    onContextMenu={(e) => handleContextMenu(e, file)}
                     className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
                       selectedFiles.has(file.name)
                         ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
@@ -593,6 +860,25 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             </table>
           )}
         </div>
+
+        {/* 右键菜单 */}
+        <ContextMenu
+          visible={ctxVisible}
+          x={ctxX}
+          y={ctxY}
+          items={ctxItems}
+          onClose={closeContextMenu}
+        />
+
+        {/* Prompt Dialog（复用项目内组件） */}
+        <PromptDialog
+          visible={promptDialog.visible}
+          title={promptDialog.title}
+          placeholder={promptDialog.placeholder}
+          defaultValue={promptDialog.defaultValue}
+          onConfirm={handlePromptConfirm}
+          onCancel={handlePromptCancel}
+        />
 
         {/* 拖拽提示覆盖层 */}
         {dragState.isDragOver && (

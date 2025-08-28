@@ -19,6 +19,10 @@ interface ConnectionService {
   getConnectionStatus(): boolean
   getCurrentCredentials(): FTPCredentials | null
   getCurrentPath(): string
+  createDirectory(remotePath: string): Promise<{ success: boolean; error?: string }>
+  deleteFile(remotePath: string): Promise<{ success: boolean; error?: string }>
+  deleteDirectory(remotePath: string): Promise<{ success: boolean; error?: string }>
+  renameFile(oldPath: string, newPath: string): Promise<{ success: boolean; error?: string }>
 }
 
 export class ConnectionManager {
@@ -113,6 +117,57 @@ export class ConnectionManager {
     const result = await this.currentService.uploadFile(localPath, remotePath)
     console.log('[ConnectionManager] uploadFile result ->', result)
     return result
+  }
+
+  async createDirectory(remotePath: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.currentService) {
+      return { success: false, error: '未连接到服务器' }
+    }
+    if (!('createDirectory' in this.currentService)) {
+      return { success: false, error: '当前协议不支持创建目录' }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return await (this.currentService as any).createDirectory(remotePath)
+  }
+
+  async deleteFile(remotePath: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.currentService) {
+      return { success: false, error: '未连接到服务器' }
+    }
+    if (!('deleteFile' in this.currentService)) {
+      return { success: false, error: '当前协议不支持删除文件' }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return await (this.currentService as any).deleteFile(remotePath)
+  }
+
+  async deleteDirectory(remotePath: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.currentService) {
+      return { success: false, error: '未连接到服务器' }
+    }
+    if (!('deleteDirectory' in this.currentService)) {
+      return { success: false, error: '当前协议不支持删除目录' }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return await (this.currentService as any).deleteDirectory(remotePath)
+  }
+
+  async renameFile(
+    oldPath: string,
+    newPath: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.currentService) {
+      return { success: false, error: '未连接到服务器' }
+    }
+    if (!('renameFile' in this.currentService)) {
+      return { success: false, error: '当前协议不支持重命名' }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return await (this.currentService as any).renameFile(oldPath, newPath)
   }
 
   async downloadFile(

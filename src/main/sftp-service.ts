@@ -393,4 +393,76 @@ export class SFTPService extends EventEmitter {
   getCurrentPath(): string {
     return this.currentRemotePath
   }
+
+  async createDirectory(remotePath: string): Promise<{ success: boolean; error?: string }> {
+    return this.queueOperation(async () => {
+      if (!this.client || !this.isConnected) {
+        return { success: false, error: 'Not connected to SFTP server' }
+      }
+      try {
+        await this.client.mkdir(remotePath, true)
+        return { success: true }
+      } catch (error) {
+        console.error('SFTP createDirectory failed:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Create directory failed'
+        }
+      }
+    })
+  }
+
+  async deleteFile(remotePath: string): Promise<{ success: boolean; error?: string }> {
+    return this.queueOperation(async () => {
+      if (!this.client || !this.isConnected) {
+        return { success: false, error: 'Not connected to SFTP server' }
+      }
+      try {
+        await this.client.delete(remotePath)
+        return { success: true }
+      } catch (error) {
+        console.error('SFTP deleteFile failed:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Delete file failed'
+        }
+      }
+    })
+  }
+
+  async deleteDirectory(remotePath: string): Promise<{ success: boolean; error?: string }> {
+    return this.queueOperation(async () => {
+      if (!this.client || !this.isConnected) {
+        return { success: false, error: 'Not connected to SFTP server' }
+      }
+      try {
+        await this.client.rmdir(remotePath, true)
+        return { success: true }
+      } catch (error) {
+        console.error('SFTP deleteDirectory failed:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Delete directory failed'
+        }
+      }
+    })
+  }
+
+  async renameFile(
+    oldPath: string,
+    newPath: string
+  ): Promise<{ success: boolean; error?: string }> {
+    return this.queueOperation(async () => {
+      if (!this.client || !this.isConnected) {
+        return { success: false, error: 'Not connected to SFTP server' }
+      }
+      try {
+        await this.client.rename(oldPath, newPath)
+        return { success: true }
+      } catch (error) {
+        console.error('SFTP renameFile failed:', error)
+        return { success: false, error: error instanceof Error ? error.message : 'Rename failed' }
+      }
+    })
+  }
 }

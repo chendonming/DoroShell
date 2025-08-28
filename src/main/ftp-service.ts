@@ -361,4 +361,76 @@ export class FTPService extends EventEmitter {
   getCurrentCredentials(): FTPCredentials | null {
     return this.currentCredentials
   }
+
+  async createDirectory(remotePath: string): Promise<{ success: boolean; error?: string }> {
+    return this.queueOperation(async () => {
+      if (!this.client || !this.isConnected) {
+        return { success: false, error: 'Not connected to FTP server' }
+      }
+      try {
+        await this.client.ensureDir(remotePath)
+        return { success: true }
+      } catch (error) {
+        console.error('createDirectory failed:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Create directory failed'
+        }
+      }
+    })
+  }
+
+  async deleteFile(remotePath: string): Promise<{ success: boolean; error?: string }> {
+    return this.queueOperation(async () => {
+      if (!this.client || !this.isConnected) {
+        return { success: false, error: 'Not connected to FTP server' }
+      }
+      try {
+        await this.client.remove(remotePath)
+        return { success: true }
+      } catch (error) {
+        console.error('deleteFile failed:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Delete file failed'
+        }
+      }
+    })
+  }
+
+  async deleteDirectory(remotePath: string): Promise<{ success: boolean; error?: string }> {
+    return this.queueOperation(async () => {
+      if (!this.client || !this.isConnected) {
+        return { success: false, error: 'Not connected to FTP server' }
+      }
+      try {
+        await this.client.removeDir(remotePath)
+        return { success: true }
+      } catch (error) {
+        console.error('deleteDirectory failed:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Delete directory failed'
+        }
+      }
+    })
+  }
+
+  async renameFile(
+    oldPath: string,
+    newPath: string
+  ): Promise<{ success: boolean; error?: string }> {
+    return this.queueOperation(async () => {
+      if (!this.client || !this.isConnected) {
+        return { success: false, error: 'Not connected to FTP server' }
+      }
+      try {
+        await this.client.rename(oldPath, newPath)
+        return { success: true }
+      } catch (error) {
+        console.error('renameFile failed:', error)
+        return { success: false, error: error instanceof Error ? error.message : 'Rename failed' }
+      }
+    })
+  }
 }

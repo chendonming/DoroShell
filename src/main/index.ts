@@ -178,6 +178,42 @@ app.whenReady().then(() => {
     return connectionManager.getCurrentCredentials()
   })
 
+  // 远程文件管理操作（创建、删除、重命名）
+  ipcMain.handle('ftp:create-directory', async (_, remotePath: string) => {
+    try {
+      return await connectionManager.createDirectory(remotePath)
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '创建远程目录失败' }
+    }
+  })
+
+  ipcMain.handle('ftp:delete-file', async (_, remotePath: string) => {
+    try {
+      return await connectionManager.deleteFile(remotePath)
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '删除远程文件失败' }
+    }
+  })
+
+  ipcMain.handle('ftp:delete-directory', async (_, remotePath: string) => {
+    try {
+      return await connectionManager.deleteDirectory(remotePath)
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '删除远程目录失败' }
+    }
+  })
+
+  ipcMain.handle('ftp:rename-file', async (_, oldPath: string, newPath: string) => {
+    try {
+      return await connectionManager.renameFile(oldPath, newPath)
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '重命名远程文件失败'
+      }
+    }
+  })
+
   // 本地文件系统 API
   ipcMain.handle('fs:read-directory', async (_, dirPath: string): Promise<LocalDirectoryResult> => {
     try {
