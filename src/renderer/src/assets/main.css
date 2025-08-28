@@ -8,6 +8,15 @@
 /* Global styles */
 * {
   box-sizing: border-box;
+  user-select: none; /* 禁止文本选择，模拟传统桌面应用 */
+}
+
+/* 允许在输入元素中选择文本 */
+input,
+textarea,
+[contenteditable="true"],
+.selectable {
+  user-select: text;
 }
 
 html,
