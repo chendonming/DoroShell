@@ -121,3 +121,23 @@ src/
 ---
 
 这个项目展示了现代Web技术在桌面应用开发中的应用，提供了专业的FTP客户端界面和用户体验。
+
+## 自动构建与发布（GitHub Actions）
+
+本仓库包含一个 GitHub Actions workflow (`.github/workflows/ci-release.yml`)，用于在创建 tag（例如 `v1.0.0`）或发布 Release 时自动构建并打包应用。默认会在 Ubuntu、Windows、macOS 三个平台上运行构建并上传构建产物到 workflow artifacts，随后由 Release 步骤将构建产物发布到 GitHub Releases。
+
+需要在仓库的 Secrets 中配置以下变量（通过 Settings → Secrets → Actions 添加）：
+
+- `GITHUB_TOKEN`：Actions 自动提供，通常不需要手动设置。用于创建 Release。 
+- `CSC_LINK`：可选，代码签名证书的远程下载链接（用于 macOS/Windows 签名）。
+- `CSC_KEY_PASSWORD`：可选，代码签名证书密码。
+
+如何触发发布：
+
+- 通过推送 tag（例如 `git tag v1.0.0 && git push origin v1.0.0`）触发自动构建并执行 Release 步骤。
+- 也可以在 GitHub 上手动创建 Release（发布类型为 `published` 时也会触发）。
+
+注意事项：
+
+- 如果需要自动签名 macOS 或 Windows 应用，请准备好签名证书并使用 `CSC_LINK`/`CSC_KEY_PASSWORD` 或 GitHub Actions 适配的签名方法。
+- workflow 文件简单示例放在 `.github/workflows/ci-release.yml`，可按需修改：构建平台、artifact 路径、打包参数等。
