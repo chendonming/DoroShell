@@ -41,6 +41,8 @@ jobs:
       - name: Package (macOS)
         if: matrix.os == 'macos-latest'
         env:
+          # Disable automatic identity discovery in CI to allow unsigned builds by default
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: |
@@ -59,7 +61,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-assets
+          name: release-assets-${{ matrix.os }}
           path: |
             dist/**
 
@@ -72,10 +74,14 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
-      - name: List downloaded files
+      - name: Gather dist files
         run: |
-          echo "Artifacts in workspace:";
-          ls -la || dir
+          echo "Collecting dist/** files into release_artifacts/"
+          mkdir -p release_artifacts
+          # find and copy all files under any dist/ directory into release_artifacts while preserving relative paths
+          find . -type f -path '*/dist/*' -print0 | xargs -0 -I{} bash -c 'dest="release_artifacts/$(dirname "{}")"; mkdir -p "$dest"; cp "{}" "$dest/"'
+          echo "Collected files:"
+          find release_artifacts -maxdepth 3 -type f -print || true
 
       - name: Create Release and upload assets
         uses: softprops/action-gh-release@v1
@@ -84,6 +90,6 @@ jobs:
           name: ${{ github.ref_name }}
           prerelease: ${{ contains(github.ref_name, 'beta') }}
           files: |
-            dist/**
+            release_artifacts/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
