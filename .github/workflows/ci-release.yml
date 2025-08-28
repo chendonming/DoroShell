@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         node-version: [20]
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -24,8 +24,21 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Write-Host "Cleaning node_modules if present"
+          if (Test-Path node_modules) { Remove-Item node_modules -Recurse -Force -ErrorAction SilentlyContinue }
+          Write-Host "Setting npm unsafe-perm to true to allow native builds"
+          npm config set unsafe-perm true
+          Write-Host "Installing dependencies"
+          npm ci --no-audit --no-fund
+
+      - name: Install dependencies (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          npm ci --no-audit --no-fund
 
       - name: Package (Windows)
         if: matrix.os == 'windows-latest'
@@ -38,30 +51,10 @@ jobs:
           npm run build
           npx electron-builder --win --x64 --publish=never
 
-      - name: Package (macOS)
-        if: matrix.os == 'macos-latest'
-        env:
-          # Disable automatic identity discovery in CI to allow unsigned builds by default
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: |
-          npm run build
-          npx electron-builder --mac --x64 --publish=never
-
-      - name: Package (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: |
-          npm run build
-          npx electron-builder --linux --x64 --publish=never
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-assets-${{ matrix.os }}
+          name: release-assets-windows
           path: |
             dist/**
 
@@ -71,17 +64,18 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
     steps:
-      - name: Download all artifacts
+      - name: Download windows artifact
         uses: actions/download-artifact@v4
+        with:
+          name: release-assets-windows
 
       - name: Gather dist files
         run: |
           echo "Collecting dist/** files into release_artifacts/"
           mkdir -p release_artifacts
-          # find and copy all files under any dist/ directory into release_artifacts while preserving relative paths
-          find . -type f -path '*/dist/*' -print0 | xargs -0 -I{} bash -c 'dest="release_artifacts/$(dirname "{}")"; mkdir -p "$dest"; cp "{}" "$dest/"'
+          cp -r ./*/dist/* release_artifacts/ 2>/dev/null || true
           echo "Collected files:"
-          find release_artifacts -maxdepth 3 -type f -print || true
+          ls -la release_artifacts || true
 
       - name: Create Release and upload assets
         uses: softprops/action-gh-release@v1
