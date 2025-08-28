@@ -20,7 +20,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ visible, x, y, items, onClose
   const menuRef = useRef<HTMLDivElement>(null)
 
   // 直接计算菜单位置，避免使用useState导致的闪烁
-  const calculatePosition = () => {
+  const calculatePosition = (): { x: number; y: number } => {
     // 更精确地估算菜单尺寸
     let estimatedHeight = 16 // 基础padding (py-1 = 8px * 2)
 
@@ -57,13 +57,13 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ visible, x, y, items, onClose
   const position = calculatePosition()
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent): void => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         onClose()
       }
     }
 
-    const handleEscape = (event: KeyboardEvent) => {
+    const handleEscape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         onClose()
       }
