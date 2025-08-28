@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import type { TransferItem } from '../../../types'
 import ContextMenu from './ContextMenu'
 import PromptDialog from './PromptDialog'
+import PathInput from './PathInput'
 
 interface LocalFileExplorerProps {
   onAddTransfer: (transfer: TransferItem) => void
@@ -24,7 +25,6 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
   const [currentPath, setCurrentPath] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
-  const [pathInput, setPathInput] = useState<string>('')
 
   // 右键菜单状态
   const [contextMenu, setContextMenu] = useState<{
@@ -60,7 +60,6 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
   const updateCurrentPath = useCallback(
     (newPath: string): void => {
       setCurrentPath(newPath)
-      setPathInput(newPath)
       onCurrentPathChange(newPath)
     },
     [onCurrentPathChange]
@@ -175,33 +174,17 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
     setContextMenu({ visible: false, x: 0, y: 0, target: undefined })
   }
 
-  const handlePathInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (e.key === 'Enter') {
-      const newPath = pathInput.trim()
-      if (newPath && newPath !== currentPath) {
-        navigateToPath(newPath)
-      }
-    } else if (e.key === 'Escape') {
-      // 恢复原路径
-      setPathInput(currentPath)
-      ;(e.target as HTMLInputElement).blur()
-    }
-  }
-
-  const navigateToPath = async (newPath: string): Promise<void> => {
+  const handlePathNavigation = async (newPath: string): Promise<void> => {
     try {
       // 尝试读取目录来检查路径是否存在
       const result = await window.api.fs.readDirectory(newPath)
       if (result.success) {
         updateCurrentPath(newPath)
       } else {
-        // 路径不存在，恢复原路径
-        setPathInput(currentPath)
         alert('路径不存在或无法访问')
       }
     } catch (error) {
       console.error('Failed to navigate to path:', error)
-      setPathInput(currentPath)
       alert('无法访问指定路径')
     }
   }
@@ -467,15 +450,13 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
       <div className="border-b border-gray-200 dark:border-gray-700 p-3">
         <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">本地文件</h2>
         <div className="mt-2">
-          <input
-            type="text"
-            value={pathInput}
-            onChange={(e) => setPathInput(e.target.value)}
-            onKeyDown={handlePathInputKeyDown}
-            onBlur={() => setPathInput(currentPath)}
-            placeholder="输入路径..."
-            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            title="按 Enter 键导航到路径，按 Esc 键取消"
+          <PathInput
+            value={currentPath}
+            onChange={setCurrentPath}
+            onNavigate={handlePathNavigation}
+            placeholder="输入本地路径..."
+            historyKey="local"
+            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
       </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import type { TransferItem } from '../../../types'
+import PathInput from './PathInput'
 
 interface RemoteFileItem {
   name: string
@@ -20,7 +21,6 @@ const RemoteFileExplorer: React.FC<RemoteFileExplorerProps> = ({ onAddTransfer }
   const [files, setFiles] = useState<RemoteFileItem[]>([])
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
-  const [pathInput, setPathInput] = useState('/')
 
   useEffect(() => {
     // Load remote files when path changes
@@ -63,11 +63,6 @@ const RemoteFileExplorer: React.FC<RemoteFileExplorerProps> = ({ onAddTransfer }
     loadFiles()
   }, [remotePath])
 
-  // 同步 pathInput 和 remotePath
-  useEffect(() => {
-    setPathInput(remotePath)
-  }, [remotePath])
-
   const loadRemoteFiles = async (): Promise<void> => {
     setLoading(true)
     try {
@@ -106,17 +101,13 @@ const RemoteFileExplorer: React.FC<RemoteFileExplorerProps> = ({ onAddTransfer }
         const result = await window.api.ftp.changeDirectory(newPath)
         if (result.success) {
           setRemotePath(newPath)
-          setPathInput(newPath)
           setSelectedFiles(new Set())
         } else {
           console.error('无法切换到目录:', newPath, result.error)
-          // 恢复原路径
-          setPathInput(remotePath)
           alert('无法访问指定路径')
         }
       } catch (error) {
         console.error('切换目录失败:', error)
-        setPathInput(remotePath)
         alert('切换目录失败')
       }
     }
@@ -161,19 +152,6 @@ const RemoteFileExplorer: React.FC<RemoteFileExplorerProps> = ({ onAddTransfer }
     }
 
     setSelectedFiles(new Set())
-  }
-
-  const handlePathInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (e.key === 'Enter') {
-      const newPath = pathInput.trim()
-      if (newPath && newPath !== remotePath) {
-        navigateToPath(newPath)
-      }
-    } else if (e.key === 'Escape') {
-      // 恢复原路径
-      setPathInput(remotePath)
-      ;(e.target as HTMLInputElement).blur()
-    }
   }
 
   const formatFileSize = (bytes: number): string => {
@@ -256,15 +234,13 @@ const RemoteFileExplorer: React.FC<RemoteFileExplorerProps> = ({ onAddTransfer }
           >
             ⬆️ 上级
           </button>
-          <input
-            type="text"
-            value={pathInput}
-            onChange={(e) => setPathInput(e.target.value)}
-            onKeyDown={handlePathInputKeyDown}
-            onBlur={() => setPathInput(remotePath)}
+          <PathInput
+            value={remotePath}
+            onChange={setRemotePath}
+            onNavigate={navigateToPath}
             placeholder="输入远程路径..."
-            className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            title="按 Enter 键导航到路径，按 Esc 键取消"
+            historyKey="remote"
+            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <button
             onClick={loadRemoteFiles}
