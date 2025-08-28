@@ -125,7 +125,12 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
     try {
       const result = await window.api.fs.readDirectory(path)
       if (result.success && result.files) {
-        setFiles(result.files)
+        // 在渲染层再次确保排序：目录优先，然后按首字母（不区分大小写）排序
+        const sorted = [...result.files].sort((a, b) => {
+          if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+          return a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+        })
+        setFiles(sorted)
       } else {
         console.error('读取目录失败:', result.error)
         setFiles([])

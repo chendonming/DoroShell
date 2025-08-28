@@ -65,6 +65,14 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     const [ctxItems, setCtxItems] = useState<CtxItem[]>([])
     const ctxTargetRef = useRef<RemoteFileItem | null>(null)
 
+    // 统一的排序函数：目录优先，然后按名称（不区分大小写）排序
+    const sortRemoteFilesList = (list: RemoteFileItem[]): RemoteFileItem[] => {
+      return list.slice().sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+        return a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+      })
+    }
+
     const loadRemoteFiles = useCallback(async (): Promise<void> => {
       setLoading(true)
       try {
@@ -83,7 +91,8 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             modified: file.modified,
             permissions: file.permissions
           }))
-          setFiles(remoteFiles)
+
+          setFiles(sortRemoteFilesList(remoteFiles))
         } else {
           console.error('刷新目录失败:', result.error)
           setFiles([])
@@ -130,7 +139,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
               modified: file.modified,
               permissions: file.permissions
             }))
-            setFiles(remoteFiles)
+            setFiles(sortRemoteFilesList(remoteFiles))
           } else {
             console.error('获取远程目录失败:', result.error)
             setFiles([])
