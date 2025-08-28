@@ -6,7 +6,8 @@ import type {
   DirectoryListResult,
   TransferResult,
   TransferProgress,
-  ElectronAPI
+  ElectronAPI,
+  LocalDirectoryResult
 } from '../types'
 
 // Custom APIs for renderer
@@ -26,8 +27,12 @@ const api: ElectronAPI = {
     uploadFile: (localPath: string, remotePath: string): Promise<TransferResult> =>
       ipcRenderer.invoke('ftp:upload-file', localPath, remotePath),
 
-    downloadFile: (remotePath: string, localPath: string): Promise<TransferResult> =>
-      ipcRenderer.invoke('ftp:download-file', remotePath, localPath),
+    downloadFile: (
+      remotePath: string,
+      localPath: string,
+      transferId?: string
+    ): Promise<TransferResult> =>
+      ipcRenderer.invoke('ftp:download-file', remotePath, localPath, transferId),
 
     getCurrentPath: (): Promise<string> => ipcRenderer.invoke('ftp:get-current-path'),
 
@@ -35,6 +40,15 @@ const api: ElectronAPI = {
 
     getCurrentCredentials: (): Promise<FTPCredentials | null> =>
       ipcRenderer.invoke('ftp:get-current-credentials'),
+
+    createDirectory: (remotePath: string) => ipcRenderer.invoke('ftp:create-directory', remotePath),
+
+    deleteFile: (remotePath: string) => ipcRenderer.invoke('ftp:delete-file', remotePath),
+
+    deleteDirectory: (remotePath: string) => ipcRenderer.invoke('ftp:delete-directory', remotePath),
+
+    renameFile: (oldPath: string, newPath: string) =>
+      ipcRenderer.invoke('ftp:rename-file', oldPath, newPath),
 
     onTransferProgress: (callback: (progress: TransferProgress) => void) => {
       const handleProgress = (
@@ -48,6 +62,40 @@ const api: ElectronAPI = {
         ipcRenderer.removeListener('transfer-progress', handleProgress)
       }
     }
+  },
+
+  fs: {
+    readDirectory: (path: string): Promise<LocalDirectoryResult> =>
+      ipcRenderer.invoke('fs:read-directory', path),
+
+    getFileStats: (path: string) => ipcRenderer.invoke('fs:get-file-stats', path),
+
+    createFile: (path: string, filename: string) =>
+      ipcRenderer.invoke('fs:create-file', path, filename),
+
+    createDirectory: (path: string, dirname: string) =>
+      ipcRenderer.invoke('fs:create-directory', path, dirname),
+
+    deleteFile: (path: string) => ipcRenderer.invoke('fs:delete-file', path),
+
+    deleteDirectory: (path: string) => ipcRenderer.invoke('fs:delete-directory', path),
+
+    renameFile: (oldPath: string, newPath: string) =>
+      ipcRenderer.invoke('fs:rename-file', oldPath, newPath)
+  },
+
+  path: {
+    getHomePath: (): Promise<string> => ipcRenderer.invoke('path:get-home-path'),
+
+    getParentPath: (path: string): Promise<string> =>
+      ipcRenderer.invoke('path:get-parent-path', path),
+
+    joinPath: (...paths: string[]): Promise<string> =>
+      ipcRenderer.invoke('path:join-path', ...paths),
+
+    resolvePath: (path: string): Promise<string> => ipcRenderer.invoke('path:resolve-path', path),
+
+    getDownloadsPath: (): Promise<string> => ipcRenderer.invoke('path:get-downloads-path')
   }
 }
 

@@ -1,22 +1,26 @@
 import React, { useState, useEffect } from 'react'
-import FTPConnection from './FTPConnection'
-import FileExplorer from './FileExplorer'
+import ConnectionManager from './ConnectionManager'
+import LocalFileExplorer from './LocalFileExplorer'
+import RemoteFileExplorer from './RemoteFileExplorer'
 import FileTransfer from './FileTransfer'
 import type { FTPCredentials, TransferItem, TransferProgress } from '../../../types'
 
 const FTPManager: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState('')
+  const [connectionStatus, setConnectionStatus] = useState('Not connected')
+  const [currentServer, setCurrentServer] = useState<string>('')
   const [transfers, setTransfers] = useState<TransferItem[]>([])
-  const [, setCurrentCredentials] = useState<FTPCredentials | null>(null)
   const [isDarkMode, setIsDarkMode] = useState(false)
+  const [showConnectionManager, setShowConnectionManager] = useState(false)
+  const [showTransferPanel, setShowTransferPanel] = useState(false)
+  const [localCurrentPath, setLocalCurrentPath] = useState<string>('')
 
   useEffect(() => {
     // 检查并设置初始主题
     const savedTheme = localStorage.getItem('theme')
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     const shouldBeDark = savedTheme === 'dark' || (!savedTheme && prefersDark)
-    
+
     setIsDarkMode(shouldBeDark)
     updateTheme(shouldBeDark)
 
@@ -52,9 +56,12 @@ const FTPManager: React.FC = () => {
 
       if (status) {
         const credentials = await window.api.ftp.getCurrentCredentials()
-        setCurrentCredentials(credentials)
-        setConnectionStatus(`Connected to ${credentials?.host}`)
+        if (credentials) {
+          setCurrentServer(`${credentials.username}@${credentials.host}`)
+          setConnectionStatus('Connected')
+        }
       } else {
+        setCurrentServer('')
         setConnectionStatus('Not connected')
       }
     } catch (error) {
@@ -71,8 +78,8 @@ const FTPManager: React.FC = () => {
 
       if (result.success) {
         setIsConnected(true)
-        setCurrentCredentials(credentials)
-        setConnectionStatus(result.message || 'Connected successfully')
+        setCurrentServer(`${credentials.username}@${credentials.host}`)
+        setConnectionStatus('Connected')
       } else {
         setIsConnected(false)
         setConnectionStatus(result.error || 'Connection failed')
@@ -88,7 +95,7 @@ const FTPManager: React.FC = () => {
     try {
       await window.api.ftp.disconnect()
       setIsConnected(false)
-      setCurrentCredentials(null)
+      setCurrentServer('')
       setConnectionStatus('Disconnected')
       setTransfers([])
     } catch (error) {
@@ -127,7 +134,27 @@ const FTPManager: React.FC = () => {
     })
   }
 
-  const addTransfer = (transfer: Omit<TransferItem, 'id' | 'progress' | 'status'>): void => {
+  // 专门用于远程文件下载的传输函数，使用本地当前路径作为下载位置
+  const addRemoteTransfer = async (
+    transfer: Omit<TransferItem, 'id' | 'progress' | 'status' | 'localPath'>
+  ): Promise<void> => {
+    if (!localCurrentPath) {
+      console.error('本地路径未设置，无法下载')
+      return
+    }
+
+    const localPath = await window.api.path.joinPath(localCurrentPath, transfer.filename)
+    const fullTransfer = {
+      ...transfer,
+      localPath
+    }
+
+    await addTransfer(fullTransfer)
+  }
+
+  const addTransfer = async (
+    transfer: Omit<TransferItem, 'id' | 'progress' | 'status'>
+  ): Promise<void> => {
     const newTransfer: TransferItem = {
       ...transfer,
       id: Math.random().toString(36).substr(2, 9),
@@ -136,6 +163,53 @@ const FTPManager: React.FC = () => {
     }
 
     setTransfers((prev) => [...prev, newTransfer])
+
+    // 立即开始下载
+    try {
+      if (transfer.type === 'download') {
+        const result = await window.api.ftp.downloadFile(
+          transfer.remotePath,
+          transfer.localPath,
+          newTransfer.id
+        )
+
+        if (result.success) {
+          // 下载成功，更新状态为完成
+          setTransfers((prev) =>
+            prev.map((t) =>
+              t.id === newTransfer.id ? { ...t, status: 'completed', progress: 100 } : t
+            )
+          )
+        } else {
+          // 下载失败
+          setTransfers((prev) =>
+            prev.map((t) => (t.id === newTransfer.id ? { ...t, status: 'failed' } : t))
+          )
+        }
+      } else if (transfer.type === 'upload') {
+        const result = await window.api.ftp.uploadFile(transfer.localPath, transfer.remotePath)
+
+        if (result.success) {
+          // 上传成功
+          setTransfers((prev) =>
+            prev.map((t) =>
+              t.id === newTransfer.id ? { ...t, status: 'completed', progress: 100 } : t
+            )
+          )
+        } else {
+          // 上传失败
+          setTransfers((prev) =>
+            prev.map((t) => (t.id === newTransfer.id ? { ...t, status: 'failed' } : t))
+          )
+        }
+      }
+    } catch (error) {
+      console.error('Transfer failed:', error)
+      // 更新转移状态为失败
+      setTransfers((prev) =>
+        prev.map((t) => (t.id === newTransfer.id ? { ...t, status: 'failed' } : t))
+      )
+    }
   }
 
   const removeTransfer = (id: string): void => {
@@ -144,24 +218,37 @@ const FTPManager: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full w-full bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-700 dark:to-purple-700 text-white p-6 shadow-lg">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-bold">FTP Manager</h1>
-          <div className="flex items-center gap-4">
-            {/* Dark Mode Toggle */}
-            <button
-              onClick={toggleDarkMode}
-              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
-              title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            >
-              {isDarkMode ? (
-                <span className="text-lg">☀️</span>
-              ) : (
-                <span className="text-lg">🌙</span>
-              )}
-            </button>
-            
+      {/* Header Toolbar */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-700 dark:to-purple-700 text-white p-4 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <h1 className="text-xl font-bold">FTP Manager</h1>
+
+            {/* Toolbar Buttons */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowConnectionManager(true)}
+                className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
+                title="Manage Connections"
+              >
+                🔌 Connections
+              </button>
+
+              <button
+                onClick={() => setShowTransferPanel(!showTransferPanel)}
+                className={`${
+                  showTransferPanel ? 'bg-white/30 border-white/50' : 'bg-white/20 border-white/30'
+                } hover:bg-white/30 text-white border px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2`}
+                title={showTransferPanel ? 'Hide Transfer Panel' : 'Show Transfer Panel'}
+              >
+                {showTransferPanel ? '📤' : '📥'} Transfers{' '}
+                {transfers.length > 0 && `(${transfers.length})`}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-4">
+            {/* Connection Status */}
             <div className="flex items-center gap-2">
               <div
                 className={`w-2 h-2 rounded-full ${
@@ -175,11 +262,23 @@ const FTPManager: React.FC = () => {
               >
                 {connectionStatus}
               </span>
+              {currentServer && <span className="text-sm text-white/80">• {currentServer}</span>}
             </div>
+
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={toggleDarkMode}
+              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
+              title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {isDarkMode ? '☀️' : '🌙'}
+            </button>
+
+            {/* Disconnect Button */}
             {isConnected && (
               <button
                 onClick={handleDisconnect}
-                className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-4 py-2 rounded-md transition-colors duration-200"
+                className="bg-red-500/80 hover:bg-red-600 text-white border border-red-400 px-3 py-2 rounded-md transition-colors duration-200"
               >
                 Disconnect
               </button>
@@ -188,21 +287,58 @@ const FTPManager: React.FC = () => {
         </div>
       </div>
 
-      {!isConnected ? (
-        <FTPConnection onConnect={handleConnect} />
-      ) : (
-        <div className="flex flex-1 h-full overflow-hidden">
-          {/* Main Content Area */}
-          <div className="flex-1 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
-            <FileExplorer onAddTransfer={addTransfer} />
-          </div>
-
-          {/* Transfer Panel */}
-          <div className="w-96 bg-white dark:bg-gray-800 flex flex-col">
-            <FileTransfer transfers={transfers} onRemoveTransfer={removeTransfer} />
-          </div>
+      {/* Main Content - Dual Panel Layout */}
+      <div className="flex flex-1 h-full overflow-hidden">
+        {/* Left Panel - Local Files */}
+        <div className="w-1/2 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+          <LocalFileExplorer
+            onAddTransfer={addTransfer}
+            onCurrentPathChange={setLocalCurrentPath}
+          />
         </div>
-      )}
+
+        {/* Right Panel - Remote Files */}
+        <div className="w-1/2 bg-white dark:bg-gray-800 flex flex-col">
+          {isConnected ? (
+            <>
+              {/* Remote File Explorer */}
+              <div className={`${showTransferPanel ? 'flex-1' : 'h-full'}`}>
+                <RemoteFileExplorer onAddTransfer={addRemoteTransfer} />
+              </div>
+
+              {/* Transfer Panel - Integrated as bottom section */}
+              {showTransferPanel && (
+                <div className="h-64 border-t border-gray-200 dark:border-gray-700 animate-slide-in">
+                  <FileTransfer transfers={transfers} onRemoveTransfer={removeTransfer} />
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center p-8">
+              <div className="text-6xl mb-4 opacity-50">🌐</div>
+              <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">
+                No FTP Connection
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                Connect to an FTP server to browse remote files
+              </p>
+              <button
+                onClick={() => setShowConnectionManager(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
+              >
+                Manage Connections
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Connection Manager Modal */}
+      <ConnectionManager
+        isOpen={showConnectionManager}
+        onClose={() => setShowConnectionManager(false)}
+        onConnect={handleConnect}
+      />
     </div>
   )
 }

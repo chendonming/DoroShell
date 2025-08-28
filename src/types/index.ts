@@ -14,9 +14,9 @@ export interface SavedFTPConnection {
   host: string
   port: number
   username: string
+  password: string // 保存密码以便一键登录
   protocol: 'ftp' | 'sftp'
   lastUsed: string
-  // 注意：出于安全考虑，不保存密码
 }
 
 export interface FileItem {
@@ -66,6 +66,51 @@ export interface TransferProgress {
   error?: string
 }
 
+// 本地文件系统类型
+export interface LocalFileItem {
+  name: string
+  type: 'file' | 'directory'
+  size: number
+  modified: string
+  path: string
+}
+
+export interface LocalDirectoryResult {
+  success: boolean
+  files?: LocalFileItem[]
+  currentPath: string
+  error?: string
+}
+
+// 本地文件系统 API
+export interface LocalFileSystemAPI {
+  readDirectory: (path: string) => Promise<LocalDirectoryResult>
+  getFileStats: (path: string) => Promise<{
+    success: boolean
+    stats?: {
+      size: number
+      isFile: boolean
+      isDirectory: boolean
+      modified: string
+    }
+    error?: string
+  }>
+  createFile: (path: string, filename: string) => Promise<{ success: boolean; error?: string }>
+  createDirectory: (path: string, dirname: string) => Promise<{ success: boolean; error?: string }>
+  deleteFile: (path: string) => Promise<{ success: boolean; error?: string }>
+  deleteDirectory: (path: string) => Promise<{ success: boolean; error?: string }>
+  renameFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>
+}
+
+// 路径操作 API
+export interface PathAPI {
+  getHomePath: () => Promise<string>
+  getParentPath: (path: string) => Promise<string>
+  joinPath: (...paths: string[]) => Promise<string>
+  resolvePath: (path: string) => Promise<string>
+  getDownloadsPath: () => Promise<string>
+}
+
 // IPC通信的FTP API类型
 export interface FTPAPI {
   connect: (credentials: FTPCredentials) => Promise<FTPConnectionResult>
@@ -73,16 +118,26 @@ export interface FTPAPI {
   listDirectory: (remotePath?: string) => Promise<DirectoryListResult>
   changeDirectory: (remotePath: string) => Promise<DirectoryListResult>
   uploadFile: (localPath: string, remotePath: string) => Promise<TransferResult>
-  downloadFile: (remotePath: string, localPath: string) => Promise<TransferResult>
+  downloadFile: (
+    remotePath: string,
+    localPath: string,
+    transferId?: string
+  ) => Promise<TransferResult>
   getCurrentPath: () => Promise<string>
   getConnectionStatus: () => Promise<boolean>
   getCurrentCredentials: () => Promise<FTPCredentials | null>
   onTransferProgress: (callback: (progress: TransferProgress) => void) => () => void
+  createDirectory: (remotePath: string) => Promise<{ success: boolean; error?: string }>
+  deleteFile: (remotePath: string) => Promise<{ success: boolean; error?: string }>
+  deleteDirectory: (remotePath: string) => Promise<{ success: boolean; error?: string }>
+  renameFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>
 }
 
 // Electron API类型
 export interface ElectronAPI {
   ftp: FTPAPI
+  fs: LocalFileSystemAPI
+  path: PathAPI
 }
 
 declare global {
