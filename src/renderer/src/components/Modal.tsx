@@ -17,7 +17,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, classNa
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
 
       <div
-        className={`relative w-[90%] max-w-3xl h-[70%] bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden ${className ?? ''}`}
+        className={`relative w-[90%] max-w-3xl h-[70%] bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden flex flex-col min-h-0 ${className ?? ''}`}
       >
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
@@ -31,7 +31,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, classNa
           </div>
         </div>
 
-        <div className="h-full overflow-auto">{children}</div>
+        <div className="flex-1 p-4 min-h-0">{children}</div>
       </div>
     </div>
   )

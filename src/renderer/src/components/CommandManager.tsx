@@ -208,8 +208,8 @@ const CommandManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   }
 
   return (
-    <div className="p-4 max-h-[70vh] flex flex-col">
-  <div ref={formRef} className="mb-3 flex gap-2 bg-transparent/0">
+    <div className="p-0 h-full flex flex-col">
+      <div ref={formRef} className="mb-3 flex gap-2 bg-transparent/0">
         <input
           className="flex-1 border rounded px-2 py-1"
           placeholder="命令描述（可选）"
@@ -237,7 +237,7 @@ const CommandManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         )}
       </div>
 
-  <div className="mb-3 flex gap-2 items-center bg-white/5 dark:bg-black/5 px-2 py-2 rounded shadow-sm border-b">
+      <div className="mb-3 flex gap-2 items-center bg-white/5 dark:bg-black/5 px-2 py-2 rounded shadow-sm border-b">
         <input
           className="flex-1 border rounded px-2 py-1"
           placeholder="按描述搜索（模糊）"
@@ -267,7 +267,7 @@ const CommandManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </label>
       </div>
 
-  <div className="space-y-2 overflow-auto flex-1">
+      <div className="space-y-2 overflow-auto flex-1 pb-4 min-h-0">
         {filteredItems.length === 0 && (
           <div className="text-sm text-gray-500 dark:text-gray-400">暂无命令，添加一些以便复用</div>
         )}
