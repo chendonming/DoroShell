@@ -62,9 +62,10 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       fileName: '',
       onConfirm: () => {}
     })
-    const [overwriteAction, setOverwriteAction] = useState<
-      'yes' | 'no' | 'yesToAll' | 'noToAll' | null
-    >(null)
+    // 使用 ref 来保存 overwriteAction 的即时值，避免在循环或异步回调中读取到过期的 state
+    const overwriteActionRef = useRef<'yes' | 'no' | 'yesToAll' | 'noToAll' | null>(null)
+    // 用一个简单的版本号 state 触发组件重渲染，以便 UI 能观察到 ref 的变化（如果需要显示在 UI 上）
+    const [, setOverwriteActionVersion] = useState(0)
     // Context menu state
     const [ctxVisible, setCtxVisible] = useState(false)
     const [ctxX, setCtxX] = useState(0)
@@ -367,7 +368,9 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     const handleFileUploads = async (
       uploads: Array<{ file: File; path: string }>
     ): Promise<void> => {
-      setOverwriteAction(null)
+      // 重置 ref，并触发一次重渲染以确保 UI 更新
+      overwriteActionRef.current = null
+      setOverwriteActionVersion((v) => v + 1)
 
       console.log('[Renderer] handleFileUploads called ->', {
         count: uploads.length,
@@ -378,8 +381,9 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
         await processUpload(upload)
       }
 
-      // 清理
-      setOverwriteAction(null)
+      // 清理 ref 并触发重渲染
+      overwriteActionRef.current = null
+      setOverwriteActionVersion((v) => v + 1)
     }
 
     // 处理单个文件上传
@@ -389,8 +393,9 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       // 检查是否存在同名文件
       const existingFile = files.find((f) => f.name === upload.file.name)
 
-      if (existingFile && overwriteAction !== 'yesToAll') {
-        if (overwriteAction === 'noToAll') {
+      // 使用 ref 来判断，避免闭包/异步导致的过期 state
+      if (existingFile && overwriteActionRef.current !== 'yesToAll') {
+        if (overwriteActionRef.current === 'noToAll') {
           return // 跳过这个文件
         }
 
@@ -400,10 +405,13 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             visible: true,
             fileName: upload.file.name,
             onConfirm: async (action) => {
+              // 隐藏对话框
               setOverwriteDialog({ visible: false, fileName: '', onConfirm: () => {} })
 
+              // 如果用户选择全部为是/否，同步更新 ref 并触发重渲染，保证后续判断即时生效
               if (action === 'yesToAll' || action === 'noToAll') {
-                setOverwriteAction(action)
+                overwriteActionRef.current = action
+                setOverwriteActionVersion((v) => v + 1)
               }
 
               if (action === 'yes' || action === 'yesToAll') {
