@@ -2,7 +2,9 @@
 
 一个使用 Electron + React + TypeScript 构建的现代化远程工具，实现了对FTP、SFTP、SSH的支持
 
-![](./resources/welcome.jpg)
+![](./resources/p1.jpg)
+
+![](./resources/p2.jpg)
 
 ## 功能特性
 
