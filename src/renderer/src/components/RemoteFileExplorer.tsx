@@ -176,25 +176,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
           // 同步输入框显示为服务器返回的路径
           setInputPath(updatedPath)
           setSelectedFiles(new Set())
-          // 保存到历史（仅保存有效路径）
-          try {
-            const key = `pathHistory_remote`
-            const saved = localStorage.getItem(key)
-            const arr = saved ? JSON.parse(saved) : []
-            const newArr = [updatedPath, ...arr.filter((p: string) => p !== updatedPath)].slice(
-              0,
-              50
-            )
-            localStorage.setItem(key, JSON.stringify(newArr))
-            // 刷新 PathInput 历史展示
-            try {
-              pathInputRef.current?.refresh?.()
-            } catch {
-              // ignore
-            }
-          } catch (e) {
-            console.error('保存历史失败', e)
-          }
+          // 刷新 PathInput 历史展示 将在 remotePath 的 useEffect 中处理历史保存
         } else {
           console.error('无法切换到目录:', newPath, result.error)
           // 切换失败时，若服务端返回了当前路径则恢复本地显示，避免被卡在不可访问的路径
@@ -227,6 +209,31 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
         }
       }
     }
+
+    // 将路径保存到历史（去重并限制 50 条），并尝试刷新 PathInput 的历史展示
+    const addPathToHistory = (path: string): void => {
+      try {
+        const key = `pathHistory_remote`
+        const saved = localStorage.getItem(key)
+        const arr = saved ? JSON.parse(saved) : []
+        const newArr = [path, ...arr.filter((p: string) => p !== path)].slice(0, 50)
+        localStorage.setItem(key, JSON.stringify(newArr))
+        try {
+          pathInputRef.current?.refresh?.()
+        } catch {
+          // ignore
+        }
+      } catch (e) {
+        console.error('保存历史失败', e)
+      }
+    }
+
+    // 只要 remotePath 发生变化且看起来是有效路径，就记录历史
+    useEffect(() => {
+      if (remotePath && typeof remotePath === 'string') {
+        addPathToHistory(remotePath)
+      }
+    }, [remotePath])
 
     const navigateUp = (): void => {
       if (remotePath !== '/') {
