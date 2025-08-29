@@ -5,6 +5,7 @@ import RemoteFileExplorer, { type RemoteFileExplorerRef } from './RemoteFileExpl
 import FileTransfer from './FileTransfer'
 import Modal from './Modal'
 import TerminalPanel from './TerminalPanel'
+import CommandManager from './CommandManager'
 import type { FTPCredentials, TransferItem, TransferProgress } from '../../../types'
 
 const FTPManager: React.FC = () => {
@@ -18,6 +19,7 @@ const FTPManager: React.FC = () => {
   const [showConnectionManager, setShowConnectionManager] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [terminalOpen, setTerminalOpen] = useState(false)
+  const [showCommandManager, setShowCommandManager] = useState(false)
   const [terminalMaximized, setTerminalMaximized] = useState(false)
   const [terminalHeight, setTerminalHeight] = useState<number>(240)
   const draggingRef = useRef(false)
@@ -384,6 +386,13 @@ const FTPManager: React.FC = () => {
               >
                 🖥️ 终端
               </button>
+              <button
+                onClick={() => setShowCommandManager(true)}
+                title="命令管理"
+                className="bg-white/20 border-white/30 hover:bg-white/30 text-white border px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
+              >
+                📋 命令
+              </button>
             </div>
           </div>
 
@@ -517,6 +526,15 @@ const FTPManager: React.FC = () => {
         onClose={() => setShowConnectionManager(false)}
         onConnect={handleConnect}
       />
+
+      {/* Command Manager Modal */}
+      <Modal
+        isOpen={showCommandManager}
+        onClose={() => setShowCommandManager(false)}
+        title="命令管理"
+      >
+        <CommandManager onClose={() => setShowCommandManager(false)} />
+      </Modal>
     </div>
   )
 }

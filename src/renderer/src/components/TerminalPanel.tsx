@@ -25,6 +25,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Terminal | null>(null)
   const measureRef = useRef<HTMLDivElement | null>(null)
+  const lastSentRef = useRef<{ cmd: string; ts: number } | null>(null)
+  const echoAccumRef = useRef<string>('')
   // connection state is provided by parent
   const connected = isConnected ?? false
   const serverInfo = currentServer ?? ''
@@ -176,6 +178,33 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
             console.debug('[ssh:data preview]', d.slice(0, 200))
           }
 
+          // If we recently sent characters from an injected command, try to suppress the echoed characters.
+          try {
+            const last = lastSentRef.current
+            if (last && Date.now() - last.ts < 1500) {
+              // normalize incoming and remove CR
+              const incoming = d.replace(/\r/g, '')
+              // accumulate
+              echoAccumRef.current += incoming
+              // If accumulated echo is still a prefix of the sent command, keep suppressing
+              if (last.cmd.startsWith(echoAccumRef.current)) {
+                return
+              }
+              // If the accumulated contains the full sent command, remove the echoed part and write the rest
+              const idx = echoAccumRef.current.indexOf(last.cmd)
+              if (idx >= 0) {
+                const after = echoAccumRef.current.slice(idx + last.cmd.length)
+                if (after) term.write(after)
+                lastSentRef.current = null
+                echoAccumRef.current = ''
+                return
+              }
+              // otherwise, fallthrough and write incoming normally
+            }
+          } catch {
+            // ignore safety checks
+          }
+
           // write incoming data
           term.write(d)
 
@@ -248,6 +277,64 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       termRef.current = null
     }
   }, [isOpen, connected])
+
+  // listen for injection events from command manager — inject directly into terminal input
+  useEffect(() => {
+    const handler = (ev: Event): void => {
+      try {
+        const detail = (ev as CustomEvent).detail as { command?: string }
+        const term = termRef.current
+        const electronApi = (window as unknown as Window & { api?: ElectronAPI }).api
+        if (detail && typeof detail.command === 'string') {
+          const cmd = detail.command
+          if (connected && electronApi?.ssh?.send) {
+            // prepare to accumulate remote echo and suppress it
+            echoAccumRef.current = ''
+            lastSentRef.current = { cmd, ts: Date.now() }
+            // write locally so command is visible immediately
+            try {
+              term?.write(cmd)
+            } catch {
+              /* ignore */
+            }
+            // send characters to remote without newline so user can press Enter to execute
+            for (const ch of cmd) {
+              try {
+                electronApi.ssh.send(ch)
+              } catch {
+                // ignore per-char send errors
+              }
+            }
+            // fallback to clear markers after a short time
+            setTimeout(() => {
+              try {
+                if (lastSentRef.current && Date.now() - lastSentRef.current.ts > 1500) {
+                  lastSentRef.current = null
+                  echoAccumRef.current = ''
+                }
+              } catch {
+                // ignore
+              }
+            }, 1500)
+          } else {
+            // not connected -> just visually write command into local terminal
+            try {
+              term?.write(cmd)
+            } catch {
+              // ignore
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    window.addEventListener('doro:injectCommand', handler as EventListener)
+    return () => window.removeEventListener('doro:injectCommand', handler as EventListener)
+  }, [connected])
+
+  // overlay removed — injections now write directly into terminal
 
   // connection is controlled externally; this panel only displays terminal
 
@@ -371,6 +458,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
             <div className="text-gray-900 dark:text-white text-sm">已断开 - 终端不可用</div>
           </div>
         )}
+
+        {/* direct injection — overlay removed */}
       </div>
     </div>
   )
