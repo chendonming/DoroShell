@@ -107,7 +107,7 @@ const TitleBar: React.FC<Props> = ({
                 >
                   {connectionStatus}
                 </span>
-                {currentServer && <span className="text-sm text-white/80">• {currentServer}</span>}
+                {currentServer && <span className="text-sm text-white/80 max-w-[200px] truncate">• {currentServer}</span>}
               </div>
             </div>
 

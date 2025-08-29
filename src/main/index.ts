@@ -27,7 +27,7 @@ function createWindow(): void {
     width: 1200,
     height: 800,
     minHeight: 620,
-    minWidth: 900,
+    minWidth: 1200,
     show: false,
     autoHideMenuBar: true,
     // remove system title bar so renderer can draw its own
