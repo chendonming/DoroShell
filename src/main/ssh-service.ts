@@ -23,48 +23,55 @@ export class SSHService extends EventEmitter {
         if (process.env.NODE_ENV === 'development') {
           console.debug('[ssh-service] connection ready')
         }
-        // 启动一个交互式 shell，尝试分配 pty
-        // 默认 cols/rows 可在连接后通过 resize 更新（若需要）
+        // 使用 exec 先注入设置命令并执行一个登录 shell，这样设置命令不会在后续交互 shell 中被分片回显
         const ptyOpts = { term: 'xterm', cols: 80, rows: 24 }
-        this.conn?.shell(ptyOpts, (err, stream) => {
-          if (err) {
-            if (process.env.NODE_ENV === 'development') {
-              console.debug('[ssh-service] shell open error ->', err.message)
-            }
-            resolve({ success: false, error: err.message })
-            return
-          }
-
-          if (process.env.NODE_ENV === 'development') {
-            console.debug('[ssh-service] shell opened')
-          }
-
-          let firstData = true
-          stream.on('data', (chunk: Buffer) => {
-            const s = chunk.toString()
-            if (process.env.NODE_ENV === 'development') {
-              if (firstData) {
-                console.debug('[ssh-service] first data preview ->', s.slice(0, 200))
-                firstData = false
-              } else {
-                console.debug('[ssh-service] data preview ->', s.slice(0, 200))
+        try {
+          const cmd = `export PROMPT_COMMAND='DIR=$(basename "$PWD"); [ "$PWD" = "/" ] && DIR=""; PS1="[$(whoami)@$(hostname -s) \${DIR}]# "' ; exec /bin/bash -l`
+          this.conn?.exec(cmd, { pty: ptyOpts }, (err, stream) => {
+            if (err) {
+              if (process.env.NODE_ENV === 'development') {
+                console.debug('[ssh-service] exec open error ->', err.message)
               }
+              resolve({ success: false, error: err.message })
+              return
             }
-            this.emit('data', s)
-          })
 
-          stream.on('close', () => {
             if (process.env.NODE_ENV === 'development') {
-              console.debug('[ssh-service] shell closed')
+              console.debug('[ssh-service] exec opened')
             }
-            this.emit('close')
+
+            let firstData = true
+            stream.on('data', (chunk: Buffer) => {
+              const s = chunk.toString()
+              if (process.env.NODE_ENV === 'development') {
+                if (firstData) {
+                  console.debug('[ssh-service] first data preview ->', s.slice(0, 200))
+                  firstData = false
+                } else {
+                  console.debug('[ssh-service] data preview ->', s.slice(0, 200))
+                }
+              }
+              this.emit('data', s)
+            })
+
+            stream.on('close', () => {
+              if (process.env.NODE_ENV === 'development') {
+                console.debug('[ssh-service] exec closed')
+              }
+              this.emit('close')
+            })
+
+            // 将 stream 保存到实例以便 send 使用
+            this._stream = stream
+
+            resolve({ success: true })
           })
-
-          // 将 stream 保存到实例以便 send 使用
-          this._stream = stream
-
-          resolve({ success: true })
-        })
+        } catch (err) {
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('[ssh-service] exec launch error ->', err)
+          }
+          resolve({ success: false, error: String(err) })
+        }
       })
 
       this.conn.on('error', (err) => {
