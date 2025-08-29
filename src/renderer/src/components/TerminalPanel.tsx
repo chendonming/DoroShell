@@ -255,7 +255,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
   return (
     <div className="h-full w-full flex flex-col">
-  <div className="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-black/90 shadow-sm dark:shadow-none">
+      <div className="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-black/90 shadow-sm dark:shadow-none">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-900 dark:text-white">
             {serverInfo || 'SSH 终端'}

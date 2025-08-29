@@ -457,19 +457,19 @@ const FTPManager: React.FC = () => {
 
         {/* 终端区 */}
         {terminalOpen && (
-            <div
-              style={{ height: terminalMaximized ? '100%' : `${terminalHeight}px` }}
-              className="border-t border-gray-200 dark:border-gray-700 bg-gray-900"
-            >
-              <TerminalPanel
-                isOpen={terminalOpen}
-                onClose={() => setTerminalOpen(false)}
-                onToggleMaximize={() => setTerminalMaximized((v) => !v)}
-                isMaximized={terminalMaximized}
-                isConnected={isConnected}
-                currentServer={currentServer}
-              />
-            </div>
+          <div
+            style={{ height: terminalMaximized ? '100%' : `${terminalHeight}px` }}
+            className="border-t border-gray-200 dark:border-gray-700 bg-gray-900"
+          >
+            <TerminalPanel
+              isOpen={terminalOpen}
+              onClose={() => setTerminalOpen(false)}
+              onToggleMaximize={() => setTerminalMaximized((v) => !v)}
+              isMaximized={terminalMaximized}
+              isConnected={isConnected}
+              currentServer={currentServer}
+            />
+          </div>
         )}
       </div>
 
