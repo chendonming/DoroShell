@@ -8,8 +8,8 @@ import type { ElectronAPI } from '../../../types'
 interface TerminalPanelProps {
   isOpen: boolean
   onClose: () => void
-  onMaximize?: () => void
-  onRestore?: () => void
+  isMaximized?: boolean
+  onToggleMaximize?: () => void
   isConnected?: boolean
   currentServer?: string
 }
@@ -17,8 +17,8 @@ interface TerminalPanelProps {
 const TerminalPanel: React.FC<TerminalPanelProps> = ({
   isOpen,
   onClose,
-  onMaximize,
-  onRestore,
+  isMaximized,
+  onToggleMaximize,
   isConnected,
   currentServer
 }) => {
@@ -203,30 +203,89 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     <div className="h-full w-full flex flex-col">
       <div className="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{serverInfo || 'SSH 终端'}</span>
-          <span className="text-xs text-gray-400">{connected ? '已连接' : '未连接'}</span>
+          <span className="text-sm font-medium text-gray-900 dark:text-white">
+            {serverInfo || 'SSH 终端'}
+          </span>
+          <span className={`text-xs ${connected ? 'text-green-400' : 'text-red-400'}`}>
+            {connected ? '已连接' : '未连接'}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={onMaximize}
-            title="最大化"
-            className="px-2 py-1 rounded bg-gray-200 dark:bg-gray-700"
+            onClick={onToggleMaximize}
+            title={isMaximized ? '还原' : '最大化'}
+            className="px-2 py-1 rounded bg-transparent text-gray-700 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 transition transform"
           >
-            ⬜
-          </button>
-          <button
-            onClick={onRestore}
-            title="还原"
-            className="px-2 py-1 rounded bg-gray-200 dark:bg-gray-700"
-          >
-            🔳
+            {isMaximized ? (
+              // Windows-style Restore icon
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect
+                  x="3"
+                  y="1"
+                  width="8"
+                  height="8"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  fill="none"
+                />
+                <rect
+                  x="1"
+                  y="3"
+                  width="8"
+                  height="8"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  fill="none"
+                />
+              </svg>
+            ) : (
+              // Windows-style Maximize icon
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect
+                  x="1.5"
+                  y="1.5"
+                  width="9"
+                  height="9"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  fill="none"
+                />
+              </svg>
+            )}
           </button>
           <button
             onClick={onClose}
             title="关闭"
-            className="px-2 py-1 rounded bg-red-500 text-white"
+            className="px-2 py-1 rounded bg-transparent text-gray-700 dark:text-white hover:bg-red-500 dark:hover:bg-red-600 hover:text-white active:scale-95 transition transform"
           >
-            ❌
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="block"
+            >
+              <path
+                d="M3 3L9 9M9 3L3 9"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </button>
         </div>
       </div>
