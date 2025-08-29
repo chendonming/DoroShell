@@ -1,9 +1,12 @@
 import React, { useEffect, useRef } from 'react'
+import { notify } from '../utils/notifications'
 
 interface ContextMenuItem {
   label?: string
   action?: () => void
   disabled?: boolean
+  // 提供禁用时的原因提示文字（可选），将用于向用户说明为何该项被禁用
+  disabledReason?: string
   separator?: boolean
   icon?: string
 }
@@ -103,6 +106,23 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ visible, x, y, items, onClose
                   : 'text-gray-700 dark:text-gray-200 cursor-pointer'
               }`}
               onClick={() => {
+                if (item.disabled) {
+                  // 如果提供禁用原因，通知用户
+                  try {
+                    if (item.disabledReason) {
+                      notify(item.disabledReason, 'info')
+                    } else {
+                      notify('此操作当前不可用', 'info')
+                    }
+                  } catch {
+                    // ignore notify errors
+                  }
+
+                  // 仍然关闭菜单
+                  onClose()
+                  return
+                }
+
                 if (!item.disabled && item.action) {
                   item.action()
                   onClose()
