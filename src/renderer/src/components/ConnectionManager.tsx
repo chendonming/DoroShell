@@ -102,7 +102,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
 
   const deleteConnection = (id: string): void => {
     ;(async () => {
-      const ok = await confirm({ message: 'Are you sure you want to delete this connection?' })
+      const ok = await confirm({ message: '你确定要删除此连接吗？😊' })
       if (!ok) return
       try {
         const updatedConnections = savedConnections.filter((conn) => conn.id !== id)
