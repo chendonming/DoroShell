@@ -31,11 +31,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const connected = isConnected ?? false
   const serverInfo = currentServer ?? ''
 
-  // notify when connection is lost
+  // only notify when connection transitions from connected -> disconnected
+  const prevConnectedRef = useRef<boolean | null>(null)
   useEffect(() => {
-    if (!connected) {
+    const prev = prevConnectedRef.current
+    // if previously connected and now not connected, notify
+    if (prev === true && !connected) {
       notify('SSH 已断开', 'info')
     }
+    // update previous state for next change
+    prevConnectedRef.current = connected
   }, [connected])
 
   useEffect(() => {
