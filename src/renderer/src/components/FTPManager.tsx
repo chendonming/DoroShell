@@ -395,7 +395,7 @@ const FTPManager: React.FC = () => {
         <div className="flex-1 min-h-0 overflow-hidden">
           <div className="flex h-full">
             {/* Left Panel - Local Files */}
-            <div className="w-1/2 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+            <div className="w-1/2 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 min-h-0 overflow-hidden">
               <LocalFileExplorer
                 onAddTransfer={addTransfer}
                 onCurrentPathChange={setLocalCurrentPath}
@@ -403,11 +403,11 @@ const FTPManager: React.FC = () => {
             </div>
 
             {/* Right Panel - Remote Files */}
-            <div className="w-1/2 bg-white dark:bg-gray-800 flex flex-col">
+            <div className="w-1/2 bg-white dark:bg-gray-800 flex flex-col min-h-0 overflow-hidden">
               {isConnected ? (
                 <>
                   {/* Remote File Explorer */}
-                  <div className={`flex-1`}>
+                  <div className="flex-1 min-h-0">
                     <RemoteFileExplorer
                       ref={remoteFileExplorerRef}
                       onAddTransfer={addRemoteTransfer}
