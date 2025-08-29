@@ -342,17 +342,72 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
     }
   }
 
-  const handleUpload = (): void => {
-    const filesToUpload = files.filter(
-      (file) => selectedFiles.has(file.path) && file.type === 'file'
-    )
+  const handleUpload = async (): Promise<void> => {
+    // 支持文件和文件夹同时勾选：文件直接上传，文件夹递归读取并上传其中的文件，保留目录结构
+    const selected = files.filter((f) => selectedFiles.has(f.path))
+
+    if (selected.length === 0) {
+      notify('请选择要上传的文件或文件夹', 'info')
+      return
+    }
 
     console.log('[Renderer] LocalFileExplorer handleUpload called ->', {
       currentPath,
-      filesToUpload
+      selected
     })
 
-    filesToUpload.forEach((file) => {
+    const uploads: Array<{ localPath: string; remotePath: string; name: string; size: number }> = []
+    const seen = new Set<string>()
+
+    const normalize = (p: string) => p.replace(/\\/g, '/')
+
+    for (const item of selected) {
+      if (item.type === 'file') {
+        if (!seen.has(item.path)) {
+          uploads.push({ localPath: item.path, remotePath: `/${item.name}`, name: item.name, size: item.size })
+          seen.add(item.path)
+        }
+      } else {
+        // 递归读取目录内容
+        const rootPath = item.path
+        const rootName = item.name
+
+        const stack = [rootPath]
+
+        while (stack.length > 0) {
+          // 弹出一个目录并读取其条目
+          // 注意：这里按顺序读取，避免一次性递归造成大量并发
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          const dir = stack.pop()!
+          try {
+            const res = await window.api.fs.readDirectory(dir)
+            if (res.success && res.files) {
+              for (const child of res.files) {
+                const childPath = child.path
+                if (child.type === 'file') {
+                  if (!seen.has(childPath)) {
+                    // 计算相对于选中根目录的相对路径，用于在远端恢复目录结构
+                    const rel = normalize(childPath).startsWith(normalize(rootPath) + '/')
+                      ? normalize(childPath).slice(normalize(rootPath).length + 1)
+                      : child.name
+                    const remotePath = `/${rootName}/${rel}`
+                    uploads.push({ localPath: childPath, remotePath, name: child.name, size: child.size })
+                    seen.add(childPath)
+                  }
+                } else if (child.type === 'directory') {
+                  stack.push(childPath)
+                }
+              }
+            }
+          } catch (err) {
+            console.error('读取目录失败:', dir, err)
+          }
+        }
+      }
+    }
+
+    // 触发上传
+    for (const file of uploads) {
       onAddTransfer({
         id: `upload-${Date.now()}-${Math.random()}`,
         filename: file.name,
@@ -360,10 +415,10 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
         progress: 0,
         status: 'pending',
         type: 'upload',
-        localPath: file.path,
-        remotePath: `/${file.name}` // 默认上传到远程根目录
+        localPath: file.localPath,
+        remotePath: file.remotePath
       })
-    })
+    }
 
     setSelectedFiles(new Set())
   }
@@ -571,19 +626,14 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                     <input
                       type="checkbox"
                       className="mr-2"
-                      checked={
-                        files.length > 0 &&
-                        files.every((f) => f.type === 'directory' || selectedFiles.has(f.path))
-                      }
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedFiles(
-                            new Set(files.filter((f) => f.type === 'file').map((f) => f.path))
-                          )
-                        } else {
-                          setSelectedFiles(new Set())
-                        }
-                      }}
+                        checked={files.length > 0 && files.every((f) => selectedFiles.has(f.path))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedFiles(new Set(files.map((f) => f.path)))
+                          } else {
+                            setSelectedFiles(new Set())
+                          }
+                        }}
                     />
                     Name
                   </th>
@@ -617,14 +667,12 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                   >
                     <td className="p-3 border-b border-gray-100 dark:border-gray-700">
                       <div className="flex items-center space-x-3">
-                        {file.type === 'file' && (
-                          <input
-                            type="checkbox"
-                            checked={selectedFiles.has(file.path)}
-                            onChange={(e) => handleFileSelection(file.path, e.target.checked)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        )}
+                        <input
+                          type="checkbox"
+                          checked={selectedFiles.has(file.path)}
+                          onChange={(e) => handleFileSelection(file.path, e.target.checked)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
                         <span className="text-2xl">{file.type === 'directory' ? '📁' : '📄'}</span>
                         <span className="text-sm text-gray-900 dark:text-gray-100 truncate">
                           {file.name}
