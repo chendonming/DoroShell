@@ -318,7 +318,7 @@ const FTPManager: React.FC = () => {
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-700 dark:to-purple-700 text-white p-4 shadow-lg relative">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-bold">FTP Manager</h1>
+            <h1 className="text-xl font-bold">DoroShell</h1>
 
             {/* Toolbar Buttons */}
             <div className="flex items-center space-x-2">
