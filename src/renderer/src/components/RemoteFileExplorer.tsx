@@ -484,6 +484,35 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
               }
             }
             break
+          case 'createFile':
+            {
+              // 使用 uploadDraggedFile 上传空内容以在远端创建一个空文件
+              const filename = value.trim()
+              if (!filename) {
+                notify('文件名不能为空', 'info')
+                break
+              }
+
+              try {
+                const targetPath = remotePath === '/' ? `/${filename}` : `${remotePath}/${filename}`
+                const emptyBuffer = new ArrayBuffer(0)
+                const result = await window.api.ftp.uploadDraggedFile(
+                  emptyBuffer,
+                  filename,
+                  targetPath
+                )
+                if (result.success) {
+                  await loadRemoteFiles()
+                  notify('创建文件成功', 'success')
+                } else {
+                  notify('创建文件失败: ' + (result.error || '未知错误'), 'error')
+                }
+              } catch (err) {
+                console.error('createFile failed', err)
+                notify('创建文件失败', 'error')
+              }
+            }
+            break
           case 'rename':
             {
               const target = ctxTargetRef.current
@@ -562,8 +591,14 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       items.push({
         label: '创建文件',
         action: () => {
-          notify('远程创建文件暂不支持', 'info')
-          closeContextMenu()
+          // 弹出创建文件输入框
+          setPromptDialog({
+            visible: true,
+            title: '创建远程文件',
+            placeholder: '请输入文件名',
+            defaultValue: '',
+            action: 'createFile'
+          })
         },
         icon: '📄'
       })
