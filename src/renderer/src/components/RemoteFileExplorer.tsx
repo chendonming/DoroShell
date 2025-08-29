@@ -377,8 +377,12 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
         uploads: uploads.map((u) => ({ name: u.file.name, path: u.path }))
       })
 
+      // Generate a batchId for this upload operation so FTPManager can
+      // aggregate refreshes and other per-batch behaviors.
+      const batchId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
       for (const upload of uploads) {
-        await processUpload(upload)
+        await processUpload(upload, batchId)
       }
 
       // 清理 ref 并触发重渲染
@@ -387,7 +391,10 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     }
 
     // 处理单个文件上传
-    const processUpload = async (upload: { file: File; path: string }): Promise<void> => {
+    const processUpload = async (
+      upload: { file: File; path: string },
+      batchId?: string
+    ): Promise<void> => {
       const targetPath = remotePath === '/' ? `/${upload.path}` : `${remotePath}/${upload.path}`
 
       // 检查是否存在同名文件
@@ -415,7 +422,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
               }
 
               if (action === 'yes' || action === 'yesToAll') {
-                await performUpload(upload, targetPath)
+                await performUpload(upload, targetPath, batchId)
               }
 
               resolve()
@@ -424,21 +431,23 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
         })
       } else {
         // 没有冲突或者已经选择了全部覆盖
-        await performUpload(upload, targetPath)
+        await performUpload(upload, targetPath, batchId)
       }
     }
 
     // 执行实际的文件上传
     const performUpload = async (
       upload: { file: File; path: string },
-      targetPath: string
+      targetPath: string,
+      batchId?: string
     ): Promise<void> => {
       try {
         // 添加到传输队列
         console.log('[Renderer] RemoteFileExplorer performUpload ->', {
           filename: upload.file.name,
           size: upload.file.size,
-          targetPath
+          targetPath,
+          batchId
         })
 
         await onAddTransfer({
@@ -446,7 +455,8 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
           filename: upload.file.name,
           size: upload.file.size,
           remotePath: targetPath,
-          draggedFile: upload.file // 传递File对象给FTPManager处理
+          draggedFile: upload.file, // 传递File对象给FTPManager处理
+          batchId
         })
       } catch (error) {
         console.error('上传失败:', error)
@@ -584,12 +594,20 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
         {
           label: '复制路径',
           action: () => {
+            // 如果是对某个条目右键（ctxTargetRef），复制该条目的完整路径；否则复制当前 remotePath
+            const target = ctxTargetRef.current
+            const text = target
+              ? remotePath === '/'
+                ? `/${target.name}`
+                : `${remotePath}/${target.name}`
+              : remotePath
             navigator.clipboard
-              .writeText(remotePath)
+              .writeText(text)
               .then(() => console.log('路径已复制'))
               .catch((e) => console.error('复制失败', e))
             closeContextMenu()
           },
+          disabled: ctxTargetRef.current ? false : selectedFiles.size !== 1,
           icon: '📋'
         },
         { separator: true }
@@ -644,7 +662,8 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             notify('请选择目标重命名项', 'info')
           }
         },
-        disabled: !canModify,
+        // 仅在单选时允许重命名
+        disabled: !canModify || selectedFiles.size > 1,
         disabledReason: !isConnected
           ? '未连接到 FTP/SFTP，无法重命名'
           : protocols.length === 1 && protocols[0] === 'ssh'
@@ -934,15 +953,10 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
                     <input
                       type="checkbox"
                       className="mr-2"
-                      checked={
-                        files.length > 0 &&
-                        files.every((f) => f.type === 'directory' || selectedFiles.has(f.name))
-                      }
+                      checked={files.length > 0 && files.every((f) => selectedFiles.has(f.name))}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedFiles(
-                            new Set(files.filter((f) => f.type === 'file').map((f) => f.name))
-                          )
+                          setSelectedFiles(new Set(files.map((f) => f.name)))
                         } else {
                           setSelectedFiles(new Set())
                         }
@@ -975,14 +989,12 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
                   >
                     <td className="p-3 border-b border-gray-100 dark:border-gray-700">
                       <div className="flex items-center space-x-3">
-                        {file.type === 'file' && (
-                          <input
-                            type="checkbox"
-                            checked={selectedFiles.has(file.name)}
-                            onChange={(e) => handleFileSelection(file.name, e.target.checked)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        )}
+                        <input
+                          type="checkbox"
+                          checked={selectedFiles.has(file.name)}
+                          onChange={(e) => handleFileSelection(file.name, e.target.checked)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
                         <span className="text-lg">{getFileIcon(file)}</span>
                         <span className="text-sm text-gray-900 dark:text-white font-medium">
                           {file.name}

@@ -417,6 +417,8 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
     }
 
     // 触发上传
+    // 为本次批量上传生成唯一 batchId，FTPManager 将基于此合并刷新
+    const batchId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     for (const file of uploads) {
       onAddTransfer({
         id: `upload-${Date.now()}-${Math.random()}`,
@@ -426,7 +428,8 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
         status: 'pending',
         type: 'upload',
         localPath: file.localPath,
-        remotePath: file.remotePath
+        remotePath: file.remotePath,
+        batchId
       })
     }
 

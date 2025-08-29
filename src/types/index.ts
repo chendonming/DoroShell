@@ -37,6 +37,7 @@ export interface TransferItem {
   type: 'upload' | 'download'
   localPath: string
   remotePath: string
+  batchId?: string
   error?: string
   draggedFile?: File // 用于支持拖拽上传的文件
 }

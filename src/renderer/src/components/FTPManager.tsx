@@ -12,6 +12,8 @@ const FTPManager: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState('未连接')
   const [currentServer, setCurrentServer] = useState<string>('')
   const [transfers, setTransfers] = useState<TransferItem[]>([])
+  // track pending counts per batchId to avoid multiple refreshes for batch uploads
+  const batchPending = useRef<Record<string, number>>({})
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [showConnectionManager, setShowConnectionManager] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
@@ -228,6 +230,11 @@ const FTPManager: React.FC = () => {
       status: 'pending'
     }
 
+    // track batch pending count
+    if (transfer.batchId) {
+      batchPending.current[transfer.batchId] = (batchPending.current[transfer.batchId] || 0) + 1
+    }
+
     setTransfers((prev) => [...prev, newTransfer])
 
     // 立即开始下载
@@ -287,9 +294,23 @@ const FTPManager: React.FC = () => {
               t.id === newTransfer.id ? { ...t, status: 'completed', progress: 100 } : t
             )
           )
-          // 上传成功后刷新远程文件列表
-          if (remoteFileExplorerRef.current) {
-            await remoteFileExplorerRef.current.refresh()
+          // 上传成功后：如果是批量上传，延迟刷新直到该批次所有文件完成；否则立即刷新
+          if (transfer.batchId) {
+            batchPending.current[transfer.batchId] = Math.max(
+              0,
+              (batchPending.current[transfer.batchId] || 1) - 1
+            )
+            if (batchPending.current[transfer.batchId] === 0) {
+              // batch complete -> refresh once and cleanup
+              delete batchPending.current[transfer.batchId]
+              if (remoteFileExplorerRef.current) {
+                await remoteFileExplorerRef.current.refresh()
+              }
+            }
+          } else {
+            if (remoteFileExplorerRef.current) {
+              await remoteFileExplorerRef.current.refresh()
+            }
           }
         } else {
           console.error('[Renderer] FTPManager upload failed ->', { id: newTransfer.id, result })
@@ -297,6 +318,19 @@ const FTPManager: React.FC = () => {
           setTransfers((prev) =>
             prev.map((t) => (t.id === newTransfer.id ? { ...t, status: 'failed' } : t))
           )
+          // on failure, also decrement pending count for batch (and refresh when zero)
+          if (transfer.batchId) {
+            batchPending.current[transfer.batchId] = Math.max(
+              0,
+              (batchPending.current[transfer.batchId] || 1) - 1
+            )
+            if (batchPending.current[transfer.batchId] === 0) {
+              delete batchPending.current[transfer.batchId]
+              if (remoteFileExplorerRef.current) {
+                await remoteFileExplorerRef.current.refresh()
+              }
+            }
+          }
         }
       }
     } catch (error) {
