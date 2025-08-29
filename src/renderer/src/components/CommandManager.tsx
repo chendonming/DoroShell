@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useConfirm } from '../hooks/useConfirm'
 import { notify } from '../utils/notifications'
 
@@ -30,6 +30,8 @@ const saveCommands = (items: CmdItem[]): void => {
 
 const CommandManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [items, setItems] = useState<CmdItem[]>([])
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [description, setDescription] = useState('')
   const [command, setCommand] = useState('')
@@ -39,6 +41,22 @@ const CommandManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   useEffect(() => {
     setItems(loadCommands())
   }, [])
+
+  // debounce search input to avoid excessive filtering while typing
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 200)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const filteredItems = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase()
+    if (!q) return items
+    return items.filter((it) => {
+      const desc = (it.description || '').toLowerCase()
+      const cmd = (it.command || '').toLowerCase()
+      return desc.includes(q) || cmd.includes(q)
+    })
+  }, [items, debouncedSearch])
 
   const resetForm = (): void => {
     setEditingId(null)
@@ -190,8 +208,8 @@ const CommandManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   }
 
   return (
-    <div className="p-4 max-h-[70vh] overflow-auto">
-      <div ref={formRef} className="mb-3 flex gap-2">
+    <div className="p-4 max-h-[70vh] flex flex-col">
+  <div ref={formRef} className="mb-3 flex gap-2 bg-transparent/0">
         <input
           className="flex-1 border rounded px-2 py-1"
           placeholder="命令描述（可选）"
@@ -219,7 +237,22 @@ const CommandManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         )}
       </div>
 
-      <div className="mb-3 flex gap-2">
+  <div className="mb-3 flex gap-2 items-center bg-white/5 dark:bg-black/5 px-2 py-2 rounded shadow-sm border-b">
+        <input
+          className="flex-1 border rounded px-2 py-1"
+          placeholder="按描述搜索（模糊）"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="bg-gray-200 px-3 py-1 rounded"
+            title="清除搜索"
+          >
+            清除
+          </button>
+        )}
         <button onClick={handleExport} className="bg-green-600 text-white px-3 py-1 rounded">
           导出 NDJSON
         </button>
@@ -234,11 +267,11 @@ const CommandManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </label>
       </div>
 
-      <div className="space-y-2">
-        {items.length === 0 && (
+  <div className="space-y-2 overflow-auto flex-1">
+        {filteredItems.length === 0 && (
           <div className="text-sm text-gray-500 dark:text-gray-400">暂无命令，添加一些以便复用</div>
         )}
-        {items.map((it) => (
+        {filteredItems.map((it) => (
           <div
             key={it.id}
             className={`border rounded p-2 flex items-start justify-between gap-2 ${
