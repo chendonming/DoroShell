@@ -110,6 +110,26 @@ const api: ElectronAPI = {
   }
 }
 
+// Window control API
+const windowControls = {
+  minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
+  maximize: (): Promise<void> => ipcRenderer.invoke('window:maximize'),
+  unmaximize: (): Promise<void> => ipcRenderer.invoke('window:unmaximize'),
+  isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:is-maximized'),
+  close: (): Promise<void> => ipcRenderer.invoke('window:close'),
+  on: (event: 'maximize' | 'unmaximize', callback: () => void) => {
+    const handler = (): void => callback()
+    ipcRenderer.on(`window:${event}`, handler)
+    return (): void => {
+      ipcRenderer.removeListener(`window:${event}`, handler)
+    }
+  }
+}
+
+// attach to api for convenience
+// @ts-ignore
+api.windowControls = windowControls
+
 // SSH 相关的桥接 API（可选，如果主进程未实现，则返回失败）
 // Implement a small buffering layer so data sent from main before the renderer
 // subscribes won't be lost. We keep a short in-memory buffer and replay it when

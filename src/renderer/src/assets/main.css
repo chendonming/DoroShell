@@ -80,3 +80,54 @@ body {
 .animate-slide-in {
   animation: slideIn 0.3s ease-out;
 }
+
+/* Custom frameless titlebar */
+.titlebar {
+  -webkit-user-select: none;
+  -webkit-app-region: drag; /* make titlebar draggable */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titlebar .titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.titlebar .titlebar-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Buttons must be non-draggable so clicks work */
+.titlebar-button {
+  -webkit-app-region: no-drag;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.titlebar-button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.titlebar-button.close:hover {
+  background: rgba(255, 80, 80, 0.95);
+}
+
+/* Focus styles for keyboard users */
+.titlebar-button:focus {
+  outline: none;
+}
+
+.titlebar-button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.3); /* indigo-500/30 */
+  border-color: rgba(99,102,241,0.6);
+}
+

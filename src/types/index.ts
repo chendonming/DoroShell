@@ -166,12 +166,23 @@ export interface SSHAPI {
   onData: (callback: (data: string) => void) => () => void
 }
 
+// window controls API exposed from preload
+export interface WindowControlsAPI {
+  minimize: () => Promise<void>
+  maximize: () => Promise<void>
+  unmaximize: () => Promise<void>
+  isMaximized: () => Promise<boolean>
+  close: () => Promise<void>
+  on: (event: 'maximize' | 'unmaximize', callback: () => void) => () => void
+}
+
 // Electron API类型
 export interface ElectronAPI {
   ftp: FTPAPI
   fs: LocalFileSystemAPI
   path: PathAPI
   ssh?: SSHAPI
+  windowControls?: WindowControlsAPI
 }
 
 declare global {

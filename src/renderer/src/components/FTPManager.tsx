@@ -6,6 +6,7 @@ import FileTransfer from './FileTransfer'
 import Modal from './Modal'
 import TerminalPanel from './TerminalPanel'
 import CommandManager from './CommandManager'
+import TitleBar from './TitleBar'
 import type { FTPCredentials, TransferItem, TransferProgress } from '../../../types'
 
 const FTPManager: React.FC = () => {
@@ -348,93 +349,26 @@ const FTPManager: React.FC = () => {
     setTransfers((prev) => prev.filter((t) => t.id !== id))
   }
 
+  // ...existing code...
+
   return (
     <div className="flex flex-col h-full w-full bg-gray-50 dark:bg-gray-900">
-      {/* Header Toolbar */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-700 dark:to-purple-700 text-white p-4 shadow-lg relative">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-bold">DoroShell</h1>
+      {/* TitleBar component */}
+      <TitleBar
+        isConnected={isConnected}
+        connectionStatus={connectionStatus}
+        currentServer={currentServer}
+        transfersCount={transfers.length}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={toggleDarkMode}
+        onOpenConnectionManager={() => setShowConnectionManager(true)}
+        onShowTransfers={() => setShowTransferModal(true)}
+        onToggleTerminal={() => setTerminalOpen((v) => !v)}
+        onOpenCommandManager={() => setShowCommandManager(true)}
+        onDisconnect={handleDisconnect}
+      />
 
-            {/* Toolbar Buttons */}
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setShowConnectionManager(true)}
-                className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
-                title="管理连接"
-              >
-                🔌 连接
-              </button>
-              <button
-                onClick={() => {
-                  if (isConnected) {
-                    setShowTransferModal(true)
-                  } else {
-                    // 如果未连接，打开连接管理
-                    setShowConnectionManager(true)
-                  }
-                }}
-                className={`bg-white/20 border-white/30 hover:bg-white/30 text-white border px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2`}
-                title={isConnected ? '显示传输' : '请先连接'}
-              >
-                📥 传输 {transfers.length > 0 && `(${transfers.length})`}
-              </button>
-              <button
-                onClick={() => setTerminalOpen((v) => !v)}
-                title="打开/关闭 终端"
-                className="bg-white/20 border-white/30 hover:bg-white/30 text-white border px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
-              >
-                🖥️ 终端
-              </button>
-              <button
-                onClick={() => setShowCommandManager(true)}
-                title="命令管理"
-                className="bg-white/20 border-white/30 hover:bg-white/30 text-white border px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
-              >
-                📋 命令
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            {/* Connection Status */}
-            <div className="flex items-center gap-2">
-              <div
-                className={`w-2 h-2 rounded-full ${
-                  isConnected
-                    ? 'bg-green-400 shadow-lg shadow-green-400/50'
-                    : 'bg-red-400 shadow-lg shadow-red-400/50'
-                }`}
-              ></div>
-              <span
-                className={`text-sm font-medium ${isConnected ? 'text-green-100' : 'text-red-100'}`}
-              >
-                {connectionStatus}
-              </span>
-              {currentServer && <span className="text-sm text-white/80">• {currentServer}</span>}
-            </div>
-
-            {/* Dark Mode Toggle */}
-            <button
-              onClick={toggleDarkMode}
-              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
-              title={isDarkMode ? '切换到浅色模式' : '切换到深色模式'}
-            >
-              {isDarkMode ? '☀️' : '🌙'}
-            </button>
-
-            {/* Disconnect Button */}
-            {isConnected && (
-              <button
-                onClick={handleDisconnect}
-                className="bg-red-500/80 hover:bg-red-600 text-white border border-red-400 px-3 py-2 rounded-md transition-colors duration-200"
-              >
-                断开连接
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+  {/* toolbar moved to TitleBar component */}
 
       {/* Main Content - 文件区 + 终端区 垂直分割 */}
       <div id="main-split-container" className="flex flex-col flex-1 h-full overflow-hidden">

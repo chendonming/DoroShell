@@ -208,19 +208,19 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
       <div className="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
         <div className="flex justify-around text-center">
           <div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Completed</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">成功</div>
             <div className="text-lg font-semibold text-green-600 dark:text-green-400">
               {completedCount}
             </div>
           </div>
           <div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Failed</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">失败</div>
             <div className="text-lg font-semibold text-red-600 dark:text-red-400">
               {failedCount}
             </div>
           </div>
           <div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Total</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">总共</div>
             <div className="text-lg font-semibold text-gray-900 dark:text-white">
               {transfers.length}
             </div>

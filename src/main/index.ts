@@ -18,14 +18,22 @@ import type { SSHCredentials } from '../types'
 
 // 创建连接管理器实例
 const connectionManager = new ConnectionManager()
+// keep a reference to main window so IPC handlers can control it
+let mainWindowRef: BrowserWindow | null = null
 
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    minHeight:620,
+    minWidth:900,
     show: false,
     autoHideMenuBar: true,
+    // remove system title bar so renderer can draw its own
+    frame: false,
+    // macOS: hide title bar area to make traffic lights appear inside the window
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' } : {}),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -33,6 +41,13 @@ function createWindow(): void {
       nodeIntegration: false,
       contextIsolation: true
     }
+  })
+
+  // store ref for IPC window controls
+  mainWindowRef = mainWindow
+
+  mainWindow.on('closed', () => {
+    if (mainWindowRef === mainWindow) mainWindowRef = null
   })
 
   mainWindow.on('ready-to-show', () => {
@@ -51,6 +66,64 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  // Window control IPC handlers
+  ipcMain.handle('window:minimize', (): void => {
+    try {
+      mainWindowRef?.minimize()
+    } catch {
+      /* ignore */
+    }
+  })
+
+  ipcMain.handle('window:maximize', (): void => {
+    try {
+      if (mainWindowRef && !mainWindowRef.isMaximized()) mainWindowRef.maximize()
+    } catch {
+      /* ignore */
+    }
+  })
+
+  ipcMain.handle('window:unmaximize', (): void => {
+    try {
+      if (mainWindowRef && mainWindowRef.isMaximized()) mainWindowRef.unmaximize()
+    } catch {
+      /* ignore */
+    }
+  })
+
+  ipcMain.handle('window:is-maximized', (): boolean => {
+    try {
+      return !!mainWindowRef && mainWindowRef.isMaximized()
+    } catch {
+      return false
+    }
+  })
+
+  ipcMain.handle('window:close', (): void => {
+    try {
+      mainWindowRef?.close()
+    } catch {
+      /* ignore */
+    }
+  })
+
+  // forward maximize/unmaximize events to renderer so UI can update
+  mainWindow.on('maximize', () => {
+    try {
+      mainWindow.webContents.send('window:maximize')
+    } catch {
+      /* ignore */
+    }
+  })
+
+  mainWindow.on('unmaximize', () => {
+    try {
+      mainWindow.webContents.send('window:unmaximize')
+    } catch {
+      /* ignore */
+    }
+  })
 
   // 监听传输进度事件
   connectionManager.on('transferProgress', (progress) => {
