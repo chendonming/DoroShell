@@ -364,7 +364,12 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
     for (const item of selected) {
       if (item.type === 'file') {
         if (!seen.has(item.path)) {
-          uploads.push({ localPath: item.path, remotePath: `/${item.name}`, name: item.name, size: item.size })
+          uploads.push({
+            localPath: item.path,
+            remotePath: `/${item.name}`,
+            name: item.name,
+            size: item.size
+          })
           seen.add(item.path)
         }
       } else {
@@ -391,7 +396,12 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                       ? normalize(childPath).slice(normalize(rootPath).length + 1)
                       : child.name
                     const remotePath = `/${rootName}/${rel}`
-                    uploads.push({ localPath: childPath, remotePath, name: child.name, size: child.size })
+                    uploads.push({
+                      localPath: childPath,
+                      remotePath,
+                      name: child.name,
+                      size: child.size
+                    })
                     seen.add(childPath)
                   }
                 } else if (child.type === 'directory') {
@@ -626,14 +636,14 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                     <input
                       type="checkbox"
                       className="mr-2"
-                        checked={files.length > 0 && files.every((f) => selectedFiles.has(f.path))}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedFiles(new Set(files.map((f) => f.path)))
-                          } else {
-                            setSelectedFiles(new Set())
-                          }
-                        }}
+                      checked={files.length > 0 && files.every((f) => selectedFiles.has(f.path))}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedFiles(new Set(files.map((f) => f.path)))
+                        } else {
+                          setSelectedFiles(new Set())
+                        }
+                      }}
                     />
                     Name
                   </th>

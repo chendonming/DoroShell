@@ -24,7 +24,7 @@ export class SSHService extends EventEmitter {
 
       this.conn = new Client()
 
-      this.conn.on('ready', () => {
+      this.conn.on('ready', async () => {
         if (process.env.NODE_ENV === 'development') {
           console.debug('[ssh-service] connection ready')
         }
@@ -86,6 +86,43 @@ export class SSHService extends EventEmitter {
             })
           }
 
+          // probe remote platform via `uname -s` to decide whether to inject export/exec
+          const probeRemoteIsUnix = (): Promise<boolean> => {
+            return new Promise((resolveProbe) => {
+              try {
+                this.conn?.exec('uname -s', { pty: ptyOpts }, (errProbe, probeStream) => {
+                  if (errProbe || !probeStream) return resolveProbe(false)
+                  let out = ''
+                  probeStream.on('data', (chunk: Buffer) => {
+                    out += chunk.toString()
+                  })
+                  probeStream.on('close', () => {
+                    const lowered = out.toLowerCase()
+                    const isUnix =
+                      lowered.includes('linux') ||
+                      lowered.includes('darwin') ||
+                      lowered.includes('unix')
+                    resolveProbe(isUnix)
+                  })
+                  probeStream.on('error', () => resolveProbe(false))
+                })
+              } catch {
+                resolveProbe(false)
+              }
+            })
+          }
+
+          const isUnix = await probeRemoteIsUnix()
+          if (!isUnix) {
+            if (process.env.NODE_ENV === 'development') {
+              console.debug(
+                '[ssh-service] remote probe indicates non-Unix shell, fallback to interactive shell'
+              )
+            }
+            fallbackToShell()
+            return
+          }
+
           this.conn?.exec(cmd, { pty: ptyOpts }, (err, stream) => {
             if (err) {
               if (process.env.NODE_ENV === 'development') {
@@ -101,7 +138,6 @@ export class SSHService extends EventEmitter {
             }
 
             let firstData = true
-            let fellback = false
             stream.on('data', (chunk: Buffer) => {
               const s = chunk.toString()
               if (process.env.NODE_ENV === 'development') {
@@ -113,30 +149,7 @@ export class SSHService extends EventEmitter {
                 }
               }
 
-              // Detect Windows shell message for unsupported `export` (e.g. "'export' is not recognized as an internal or external command")
-              if (!fellback) {
-                const lowered = s.toLowerCase()
-                if (
-                  lowered.includes('is not recognized as an internal or external command') ||
-                  lowered.includes('export: command not found') ||
-                  lowered.includes('command not found')
-                ) {
-                  fellback = true
-                  try {
-                    // destroy/close current stream and fallback
-                    try {
-                      stream.close()
-                    } catch {
-                      // ignore
-                    }
-                    fallbackToShell()
-                    return
-                  } catch {
-                    // ignore fallback errors
-                  }
-                }
-              }
-
+              // simply forward data
               this.emit('data', s)
             })
 
