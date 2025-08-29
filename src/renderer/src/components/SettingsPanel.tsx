@@ -78,8 +78,12 @@ const FontPicker: React.FC<{
       {open && filtered.length > 0 && (
         <ul
           role="listbox"
-          className={`absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-auto rounded border shadow-lg ` +
-            (theme === 'dark' ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900')}
+          className={
+            `absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-auto rounded border shadow-lg ` +
+            (theme === 'dark'
+              ? 'bg-gray-800 border-gray-700 text-white'
+              : 'bg-white border-gray-200 text-gray-900')
+          }
         >
           {filtered.map((f, idx) => (
             <li
@@ -160,7 +164,9 @@ const SettingsPanel: React.FC<Props> = ({
         <div className="relative w-full bg-white dark:bg-gray-800 rounded-md p-4">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">主题</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                主题
+              </label>
               <select
                 value={localTheme}
                 onChange={(e) => setLocalTheme(e.target.value as 'dark' | 'light')}
@@ -172,13 +178,31 @@ const SettingsPanel: React.FC<Props> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">主字体（可搜索/选择或手动输入）</label>
-              <FontPicker id="font-primary" value={primary} onChange={setPrimary} options={availableFonts} placeholder="输入以搜索或直接选择字体" theme={localTheme} />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                主字体（可搜索/选择或手动输入）
+              </label>
+              <FontPicker
+                id="font-primary"
+                value={primary}
+                onChange={setPrimary}
+                options={availableFonts}
+                placeholder="输入以搜索或直接选择字体"
+                theme={localTheme}
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">回退字体（可搜索/选择或输入通用回退，如 sans-serif）</label>
-              <FontPicker id="font-fallback" value={fallback} onChange={setFallback} options={[...availableFonts, 'sans-serif', 'serif', 'monospace']} placeholder="输入以搜索或选择回退字体，例如 sans-serif" theme={localTheme} />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                回退字体（可搜索/选择或输入通用回退，如 sans-serif）
+              </label>
+              <FontPicker
+                id="font-fallback"
+                value={fallback}
+                onChange={setFallback}
+                options={[...availableFonts, 'sans-serif', 'serif', 'monospace']}
+                placeholder="输入以搜索或选择回退字体，例如 sans-serif"
+                theme={localTheme}
+              />
             </div>
           </div>
 
@@ -192,10 +216,19 @@ const SettingsPanel: React.FC<Props> = ({
                   ? 'bg-gray-900 border-gray-800 text-white'
                   : 'bg-gray-50 border-gray-200 text-gray-900')
               }
-              style={{ fontFamily: primary ? (primary + (fallback ? ', ' + fallback : '')) : undefined }}
+              style={{
+                fontFamily: primary ? primary + (fallback ? ', ' + fallback : '') : undefined
+              }}
             >
               示例：这是字体预览 — The quick brown fox jumps over the lazy dog.
             </div>
+          </div>
+
+          <div className="mt-4 text-gray-700 dark:text-gray-200">
+            关于
+            <a href="https://nikke-goddess-of-victory-international.fandom.com/wiki/Dorothy" target="_blank" rel="noreferrer" className="text-blue-600 underline ml-1">
+              Doro
+            </a>
           </div>
 
           <div className="mt-6 flex justify-end gap-3">
@@ -205,10 +238,7 @@ const SettingsPanel: React.FC<Props> = ({
             >
               取消
             </button>
-            <button
-              onClick={apply}
-              className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm"
-            >
+            <button onClick={apply} className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm">
               应用
             </button>
           </div>
