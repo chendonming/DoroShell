@@ -43,11 +43,45 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     // track whether we've already triggered a data-driven resize
     let didDataResize = false
 
+    // define light/dark theme palettes for xterm
+    const xtermLightTheme = {
+      background: '#ffffff',
+      foreground: '#111827',
+      cursor: '#111827',
+      black: '#000000',
+      red: '#dc2626',
+      green: '#16a34a',
+      yellow: '#d97706',
+      blue: '#2563eb',
+      magenta: '#7c3aed',
+      cyan: '#0891b2',
+      white: '#ffffff',
+      brightBlack: '#6b7280',
+      brightWhite: '#f9fafb'
+    }
+
+    const xtermDarkTheme = {
+      background: '#0b1220',
+      foreground: '#e6edf3',
+      cursor: '#e6edf3',
+      black: '#0b1220',
+      red: '#f87171',
+      green: '#4ade80',
+      yellow: '#fbbf24',
+      blue: '#60a5fa',
+      magenta: '#c084fc',
+      cyan: '#67e8f9',
+      white: '#cbd5e1',
+      brightBlack: '#334155',
+      brightWhite: '#f8fafc'
+    }
+
     const term = new Terminal({
       cursorBlink: true,
       fontFamily: 'monospace',
       fontSize: 14,
-      convertEol: true
+      convertEol: true,
+      theme: document.documentElement.classList.contains('dark') ? xtermDarkTheme : xtermLightTheme
     })
     term.open(containerRef.current)
     term.focus()
@@ -101,6 +135,25 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
     // subscribe to ssh data from preload
     const electronApi = (window as unknown as Window & { api?: ElectronAPI }).api
+
+    // watch for theme changes (document.documentElement.classList toggling 'dark')
+    const mo = new MutationObserver(() => {
+      try {
+        const useDark = document.documentElement.classList.contains('dark')
+        const tAny = term as unknown as {
+          setOption?: (key: string, value: unknown) => void
+          options?: { theme?: unknown }
+        }
+        if (typeof tAny.setOption === 'function') {
+          tAny.setOption('theme', useDark ? xtermDarkTheme : xtermLightTheme)
+        } else if (tAny.options) {
+          tAny.options.theme = useDark ? xtermDarkTheme : xtermLightTheme
+        }
+      } catch {
+        /* ignore */
+      }
+    })
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
 
     const ensureFitAndResize = (): void => {
       try {
@@ -190,6 +243,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     return () => {
       cleanup()
       ro.disconnect()
+      mo.disconnect()
       term.dispose()
       termRef.current = null
     }
@@ -201,12 +255,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
   return (
     <div className="h-full w-full flex flex-col">
-      <div className="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700">
+  <div className="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-black/90 shadow-sm dark:shadow-none">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-900 dark:text-white">
             {serverInfo || 'SSH 终端'}
           </span>
-          <span className={`text-xs ${connected ? 'text-green-400' : 'text-red-400'}`}>
+          <span
+            className={`text-xs ${
+              connected ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+            }`}
+          >
             {connected ? '已连接' : '未连接'}
           </span>
         </div>
@@ -214,7 +272,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
           <button
             onClick={onToggleMaximize}
             title={isMaximized ? '还原' : '最大化'}
-            className="px-2 py-1 rounded bg-transparent text-gray-700 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 transition transform"
+            className="px-2 py-1 rounded bg-transparent text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition transform focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-300 dark:focus:ring-gray-600"
+            aria-label={isMaximized ? '还原' : '最大化'}
           >
             {isMaximized ? (
               // Windows-style Restore icon
@@ -268,7 +327,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
           <button
             onClick={onClose}
             title="关闭"
-            className="px-2 py-1 rounded bg-transparent text-gray-700 dark:text-white hover:bg-red-500 dark:hover:bg-red-600 hover:text-white active:scale-95 transition transform"
+            className="px-2 py-1 rounded bg-transparent text-gray-800 dark:text-white hover:bg-red-500 dark:hover:bg-red-600 hover:text-white active:scale-95 transition transform focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-300 dark:focus:ring-red-600"
+            aria-label="关闭终端"
           >
             <svg
               width="12"
@@ -291,7 +351,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       </div>
       <div
         ref={containerRef}
-        className="relative flex-1 bg-black/90 text-white p-0 overflow-hidden"
+        className="relative flex-1 bg-white text-gray-900 dark:bg-black/90 dark:text-white p-0 overflow-hidden shadow-sm border border-gray-200 dark:border-transparent"
       >
         {/* hidden element used to measure character size — placed inside container to inherit sizing */}
         <div
@@ -307,8 +367,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         </div>
         {/* overlay shown when disconnected to prevent input */}
         {!connected && (
-          <div className="absolute inset-0 bg-black/80 flex items-center justify-center pointer-events-auto">
-            <div className="text-white text-sm">已断开 - 终端不可用</div>
+          <div className="absolute inset-0 bg-white/80 dark:bg-black/80 flex items-center justify-center pointer-events-auto">
+            <div className="text-gray-900 dark:text-white text-sm">已断开 - 终端不可用</div>
           </div>
         )}
       </div>
