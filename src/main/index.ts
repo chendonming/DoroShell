@@ -26,8 +26,8 @@ function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    minHeight:620,
-    minWidth:900,
+    minHeight: 620,
+    minWidth: 900,
     show: false,
     autoHideMenuBar: true,
     // remove system title bar so renderer can draw its own

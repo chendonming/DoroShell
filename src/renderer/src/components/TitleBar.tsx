@@ -97,10 +97,14 @@ const TitleBar: React.FC<Props> = ({
               <div className="flex items-center gap-2">
                 <div
                   className={`w-2 h-2 rounded-full ${
-                    isConnected ? 'bg-green-400 shadow-lg shadow-green-400/50' : 'bg-red-400 shadow-lg shadow-red-400/50'
+                    isConnected
+                      ? 'bg-green-400 shadow-lg shadow-green-400/50'
+                      : 'bg-red-400 shadow-lg shadow-red-400/50'
                   }`}
                 />
-                <span className={`text-sm font-medium ${isConnected ? 'text-green-100' : 'text-red-100'}`}>
+                <span
+                  className={`text-sm font-medium ${isConnected ? 'text-green-100' : 'text-red-100'}`}
+                >
                   {connectionStatus}
                 </span>
                 {currentServer && <span className="text-sm text-white/80">• {currentServer}</span>}
@@ -125,7 +129,9 @@ const TitleBar: React.FC<Props> = ({
                 aria-label={transfersCount > 0 ? '显示传输' : '请先连接'}
               >
                 <span aria-hidden>📥</span>
-                <span className="ml-2 hidden sm:inline">传输 {transfersCount > 0 && `(${transfersCount})`}</span>
+                <span className="ml-2 hidden sm:inline">
+                  传输 {transfersCount > 0 && `(${transfersCount})`}
+                </span>
               </button>
 
               <button

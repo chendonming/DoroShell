@@ -368,7 +368,7 @@ const FTPManager: React.FC = () => {
         onDisconnect={handleDisconnect}
       />
 
-  {/* toolbar moved to TitleBar component */}
+      {/* toolbar moved to TitleBar component */}
 
       {/* Main Content - 文件区 + 终端区 垂直分割 */}
       <div id="main-split-container" className="flex flex-col flex-1 h-full overflow-hidden">
