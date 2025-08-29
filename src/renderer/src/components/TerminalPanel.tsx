@@ -296,9 +296,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
             // prepare to accumulate remote echo and suppress it
             echoAccumRef.current = ''
             lastSentRef.current = { cmd, ts: Date.now() }
-            // write locally so command is visible immediately
+            // clear current input line then write locally so command is visible immediately
             try {
-              term?.write(cmd)
+              // ESC[2K clears the entire line, \r returns carriage to start
+              term?.write('\x1b[2K\r' + cmd)
             } catch {
               /* ignore */
             }
@@ -322,9 +323,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
               }
             }, 1500)
           } else {
-            // not connected -> just visually write command into local terminal
+            // not connected -> clear line then visually write command into local terminal
             try {
-              term?.write(cmd)
+              term?.write('\x1b[2K\r' + cmd)
             } catch {
               // ignore
             }
