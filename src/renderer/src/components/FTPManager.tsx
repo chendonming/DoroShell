@@ -4,6 +4,7 @@ import LocalFileExplorer from './LocalFileExplorer'
 import RemoteFileExplorer, { type RemoteFileExplorerRef } from './RemoteFileExplorer'
 import FileTransfer from './FileTransfer'
 import Modal from './Modal'
+import TerminalPanel from './TerminalPanel'
 import type { FTPCredentials, TransferItem, TransferProgress } from '../../../types'
 
 const FTPManager: React.FC = () => {
@@ -14,6 +15,33 @@ const FTPManager: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [showConnectionManager, setShowConnectionManager] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
+  const [terminalOpen, setTerminalOpen] = useState(false)
+  const [terminalMaximized, setTerminalMaximized] = useState(false)
+  const [terminalHeight, setTerminalHeight] = useState<number>(240)
+  const draggingRef = useRef(false)
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent): void => {
+      if (!draggingRef.current) return
+      const container = document.getElementById('main-split-container')
+      if (!container) return
+      const rect = container.getBoundingClientRect()
+      const newHeight = Math.max(100, rect.bottom - e.clientY)
+      setTerminalHeight(newHeight)
+    }
+
+    const onMouseUp = (): void => {
+      draggingRef.current = false
+      document.body.style.userSelect = ''
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
   const [localCurrentPath, setLocalCurrentPath] = useState<string>('')
   const remoteFileExplorerRef = useRef<RemoteFileExplorerRef>(null)
 
@@ -85,7 +113,14 @@ const FTPManager: React.FC = () => {
 
       if (result.success) {
         setIsConnected(true)
-        setCurrentServer(`${credentials.username}@${credentials.host}`)
+        // refresh current credentials from backend to ensure canonical source
+        try {
+          const creds = await window.api.ftp.getCurrentCredentials()
+          if (creds) setCurrentServer(`${creds.username}@${creds.host}`)
+          else setCurrentServer(`${credentials.username}@${credentials.host}`)
+        } catch {
+          setCurrentServer(`${credentials.username}@${credentials.host}`)
+        }
         setConnectionStatus('已连接')
       } else {
         setIsConnected(false)
@@ -104,6 +139,14 @@ const FTPManager: React.FC = () => {
       setIsConnected(false)
       setCurrentServer('')
       setConnectionStatus('已断开连接')
+      // surface a notification for disconnect
+      try {
+        // lazy import notify to avoid circular deps
+        const { notify } = await import('../utils/notifications')
+        notify('已断开连接', 'info')
+      } catch {
+        // ignore
+      }
       setTransfers([])
     } catch (error) {
       console.error('Disconnect error:', error)
@@ -268,7 +311,7 @@ const FTPManager: React.FC = () => {
   return (
     <div className="flex flex-col h-full w-full bg-gray-50 dark:bg-gray-900">
       {/* Header Toolbar */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-700 dark:to-purple-700 text-white p-4 shadow-lg">
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-700 dark:to-purple-700 text-white p-4 shadow-lg relative">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-bold">FTP Manager</h1>
@@ -295,6 +338,13 @@ const FTPManager: React.FC = () => {
                 title={isConnected ? '显示传输' : '请先连接'}
               >
                 📥 传输 {transfers.length > 0 && `(${transfers.length})`}
+              </button>
+              <button
+                onClick={() => setTerminalOpen((v) => !v)}
+                title="打开/关闭 终端"
+                className="bg-white/20 border-white/30 hover:bg-white/30 text-white border px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
+              >
+                🖥️ 终端
               </button>
             </div>
           </div>
@@ -339,52 +389,88 @@ const FTPManager: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content - Dual Panel Layout */}
-      <div className="flex flex-1 h-full overflow-hidden">
-        {/* Left Panel - Local Files */}
-        <div className="w-1/2 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
-          <LocalFileExplorer
-            onAddTransfer={addTransfer}
-            onCurrentPathChange={setLocalCurrentPath}
-          />
-        </div>
-
-        {/* Right Panel - Remote Files */}
-        <div className="w-1/2 bg-white dark:bg-gray-800 flex flex-col">
-          {isConnected ? (
-            <>
-              {/* Remote File Explorer */}
-              <div className={`flex-1`}>
-                <RemoteFileExplorer ref={remoteFileExplorerRef} onAddTransfer={addRemoteTransfer} />
-              </div>
-
-              {/* Transfer Modal (popup) - 使用抽离组件 */}
-              <Modal
-                isOpen={showTransferModal}
-                onClose={() => setShowTransferModal(false)}
-                title="传输"
-              >
-                <FileTransfer transfers={transfers} onRemoveTransfer={removeTransfer} />
-              </Modal>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8">
-              <div className="text-6xl mb-4 opacity-50">🌐</div>
-              <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">
-                暂无 FTP 连接
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                连接到 FTP 服务器以浏览远程文件
-              </p>
-              <button
-                onClick={() => setShowConnectionManager(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
-              >
-                管理连接
-              </button>
+      {/* Main Content - 文件区 + 终端区 垂直分割 */}
+      <div id="main-split-container" className="flex flex-col flex-1 h-full overflow-hidden">
+        {/* 文件区（占更多空间） */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex h-full">
+            {/* Left Panel - Local Files */}
+            <div className="w-1/2 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+              <LocalFileExplorer
+                onAddTransfer={addTransfer}
+                onCurrentPathChange={setLocalCurrentPath}
+              />
             </div>
-          )}
+
+            {/* Right Panel - Remote Files */}
+            <div className="w-1/2 bg-white dark:bg-gray-800 flex flex-col">
+              {isConnected ? (
+                <>
+                  {/* Remote File Explorer */}
+                  <div className={`flex-1`}>
+                    <RemoteFileExplorer
+                      ref={remoteFileExplorerRef}
+                      onAddTransfer={addRemoteTransfer}
+                    />
+                  </div>
+
+                  {/* Transfer Modal (popup) - 使用抽离组件 */}
+                  <Modal
+                    isOpen={showTransferModal}
+                    onClose={() => setShowTransferModal(false)}
+                    title="传输"
+                  >
+                    <FileTransfer transfers={transfers} onRemoveTransfer={removeTransfer} />
+                  </Modal>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                  <div className="text-6xl mb-4 opacity-50">🌐</div>
+                  <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">
+                    暂无 FTP 连接
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                    连接到 FTP 服务器以浏览远程文件
+                  </p>
+                  <button
+                    onClick={() => setShowConnectionManager(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
+                  >
+                    管理连接
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
+        {/* 拖动条（仅在 terminal 打开且未最大化时显示） */}
+        {terminalOpen && !terminalMaximized && (
+          <div
+            className="h-2 cursor-row-resize bg-transparent"
+            onMouseDown={() => {
+              draggingRef.current = true
+              document.body.style.userSelect = 'none'
+            }}
+          />
+        )}
+
+        {/* 终端区 */}
+        {terminalOpen && (
+          <div
+            style={{ height: terminalMaximized ? '100%' : `${terminalHeight}px` }}
+            className="border-t border-gray-200 dark:border-gray-700 bg-gray-900"
+          >
+            <TerminalPanel
+              isOpen={terminalOpen}
+              onClose={() => setTerminalOpen(false)}
+              onMaximize={() => setTerminalMaximized(true)}
+              onRestore={() => setTerminalMaximized(false)}
+              isConnected={isConnected}
+              currentServer={currentServer}
+            />
+          </div>
+        )}
       </div>
 
       {/* Connection Manager Modal */}

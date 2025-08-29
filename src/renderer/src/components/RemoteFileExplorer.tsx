@@ -1,6 +1,6 @@
 import { useState, useEffect, useImperativeHandle, forwardRef, useCallback, useRef } from 'react'
 import type { PathInputHandle } from './PathInput'
-import { notify } from './Notification'
+import { notify } from '../utils/notifications'
 import type { TransferItem } from '../../../types'
 import PathInput from './PathInput'
 import ContextMenu from './ContextMenu'

@@ -1,53 +1,13 @@
 import React, { useEffect, useState } from 'react'
-
-type NotificationType = 'info' | 'success' | 'error'
-
-export interface NotificationItem {
-  id: number
-  type: NotificationType
-  message: string
-}
-
-type Subscriber = (items: NotificationItem[]) => void
-
-const subscribers: Subscriber[] = []
-let items: NotificationItem[] = []
-let nextId = 1
-
-export const notify = (
-  message: string,
-  type: NotificationType = 'error',
-  timeout = 4000
-): number => {
-  const id = nextId++
-  const item: NotificationItem = { id, type, message }
-  items = [item, ...items]
-  subscribers.forEach((s) => s(items))
-
-  if (timeout > 0) {
-    setTimeout(() => {
-      remove(id)
-    }, timeout)
-  }
-
-  return id
-}
-
-export const remove = (id: number): void => {
-  items = items.filter((i) => i.id !== id)
-  subscribers.forEach((s) => s(items))
-}
+import { getItems, subscribe } from '../utils/notifications'
+import type { NotificationItem } from '../utils/notifications'
 
 export const Notifications: React.FC = () => {
-  const [state, setState] = useState<NotificationItem[]>(items)
+  const [state, setState] = useState<NotificationItem[]>(getItems())
 
   useEffect(() => {
-    const sub: Subscriber = (updated) => setState([...updated])
-    subscribers.push(sub)
-    return () => {
-      const idx = subscribers.indexOf(sub)
-      if (idx >= 0) subscribers.splice(idx, 1)
-    }
+    const unsub = subscribe((updated) => setState([...updated]))
+    return () => unsub()
   }, [])
 
   if (state.length === 0) return null

@@ -42,6 +42,23 @@ export class SFTPService extends EventEmitter {
 
       this.client = new SftpClient()
 
+      try {
+        // forward underlying errors
+        const emitterLike = this.client as unknown as { on?: (ev: string, cb: (...args: unknown[]) => void) => void }
+        if (emitterLike && typeof emitterLike.on === 'function') {
+          emitterLike.on('error', (...args: unknown[]) => {
+            try {
+              const e = (args && args[0]) as Error
+              this.emit('error', e)
+            } catch {
+              /* ignore */
+            }
+          })
+        }
+      } catch {
+        /* ignore */
+      }
+
       await this.client.connect({
         host: credentials.host,
         port: credentials.port,
@@ -77,7 +94,18 @@ export class SFTPService extends EventEmitter {
   async disconnect(): Promise<void> {
     try {
       if (this.client) {
-        await this.client.end()
+        try {
+          await this.client.end()
+        } catch (err) {
+          // Ignore common network reset errors
+          const msg = err instanceof Error ? err.message : String(err)
+          if (msg.includes('ECONNRESET')) {
+            // expected on some servers, do not log as error
+            console.warn('SFTP disconnect ECONNRESET ignored')
+          } else {
+            console.error('SFTP client end error:', err)
+          }
+        }
         this.client = null
       }
       this.isConnected = false

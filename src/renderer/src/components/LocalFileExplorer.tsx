@@ -3,7 +3,7 @@ import type { TransferItem } from '../../../types'
 import ContextMenu from './ContextMenu'
 import PromptDialog from './PromptDialog'
 import PathInput from './PathInput'
-import { notify } from './Notification'
+import { notify } from '../utils/notifications'
 import type { PathInputHandle } from './PathInput'
 
 interface LocalFileExplorerProps {

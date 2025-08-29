@@ -109,6 +109,50 @@ const api: ElectronAPI = {
   }
 }
 
+// SSH 相关的桥接 API（可选，如果主进程未实现，则返回失败）
+// Implement a small buffering layer so data sent from main before the renderer
+// subscribes won't be lost. We keep a short in-memory buffer and replay it when
+// the renderer registers a listener.
+const sshBuffer: string[] = []
+const ipcHandler = (_event: Electron.IpcRendererEvent, data: string): void => {
+  // push incoming data into buffer; keep buffer reasonably bounded
+  try {
+    sshBuffer.push(data)
+    if (sshBuffer.length > 200) {
+      // drop old entries if buffer grows too large
+      sshBuffer.shift()
+    }
+  } catch {
+    // ignore
+  }
+}
+
+ipcRenderer.on('ssh:data', ipcHandler)
+
+api.ssh = {
+  connect: (credentials) => ipcRenderer.invoke('ssh:connect', credentials),
+  disconnect: () => ipcRenderer.invoke('ssh:disconnect'),
+  send: (data: string) => ipcRenderer.invoke('ssh:send', data),
+  onData: (callback: (data: string) => void) => {
+    // replay buffered data synchronously first
+    try {
+      for (const chunk of sshBuffer) {
+        callback(chunk)
+      }
+    } catch {
+      // ignore replay errors
+    }
+
+    // then register live handler
+    const handler = (_event: Electron.IpcRendererEvent, data: string): void => callback(data)
+    ipcRenderer.on('ssh:data', handler)
+
+    return (): void => {
+      ipcRenderer.removeListener('ssh:data', handler)
+    }
+  }
+}
+
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise
 // just add to the DOM global.

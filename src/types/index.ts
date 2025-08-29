@@ -141,11 +141,28 @@ export interface FTPAPI {
   renameFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>
 }
 
+// SSH Terminal related types
+export interface SSHCredentials {
+  host: string
+  port: number
+  username: string
+  password?: string
+  privateKey?: string
+}
+
+export interface SSHAPI {
+  connect: (credentials: SSHCredentials) => Promise<{ success: boolean; error?: string }>
+  disconnect: () => Promise<void>
+  send: (data: string) => Promise<void>
+  onData: (callback: (data: string) => void) => () => void
+}
+
 // Electron API类型
 export interface ElectronAPI {
   ftp: FTPAPI
   fs: LocalFileSystemAPI
   path: PathAPI
+  ssh?: SSHAPI
 }
 
 declare global {

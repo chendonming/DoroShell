@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { notify } from './Notification'
+import { notify } from '../utils/notifications'
 import type { FTPCredentials, SavedFTPConnection } from '../../../types'
 
 interface ConnectionManagerProps {
@@ -215,50 +215,81 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
                   <p className="text-sm">创建新连接以开始使用</p>
                 </div>
               ) : (
-                savedConnections.map((connection) => (
-                  <div
-                    key={connection.id}
-                    className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div
-                        className="flex-1 cursor-pointer"
-                        onClick={() => handleConnect(connection)}
-                      >
-                        <div className="font-medium text-gray-900 dark:text-white">
-                          {connection.name}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          {connection.username}@{connection.host}:{connection.port}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-500">
-                          {connection.protocol.toUpperCase()} • 最后使用:{' '}
-                          {new Date(connection.lastUsed).toLocaleDateString()}
-                        </div>
-                      </div>
+                savedConnections.map((connection) => {
+                  const disabled = isConnecting !== null && isConnecting !== connection.id
+                  return (
+                    <div
+                      key={connection.id}
+                      className={`rounded-lg p-4 transition-colors ${
+                        disabled
+                          ? 'bg-gray-100/60 dark:bg-gray-800/60 opacity-60'
+                          : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        {(() => {
+                          const titleClass = disabled
+                            ? 'font-medium text-gray-500 dark:text-gray-400'
+                            : 'font-medium text-gray-900 dark:text-white'
+                          const metaClass = disabled
+                            ? 'text-sm text-gray-400 dark:text-gray-500'
+                            : 'text-sm text-gray-600 dark:text-gray-400'
+                          const wrapperCursor = disabled ? 'cursor-not-allowed' : 'cursor-pointer'
 
-                      <div className="flex items-center space-x-2">
-                        {isConnecting === connection.id && (
-                          <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                        )}
-                        <button
-                          onClick={() => editConnection(connection)}
-                          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded transition-colors"
-                          title="编辑"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => deleteConnection(connection.id)}
-                          className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 rounded transition-colors"
-                          title="删除"
-                        >
-                          🗑️
-                        </button>
+                          return (
+                            <div
+                              className={`flex-1 ${wrapperCursor}`}
+                              onClick={disabled ? undefined : () => handleConnect(connection)}
+                              aria-disabled={disabled}
+                              title={disabled ? '正在连接，请等待该连接完成后再操作' : undefined}
+                            >
+                              <div className={titleClass}>{connection.name}</div>
+                              <div className={metaClass}>
+                                {connection.username}@{connection.host}:{connection.port} •{' '}
+                                <span className="text-xs text-gray-500 dark:text-gray-500">
+                                  {connection.protocol === 'sftp'
+                                    ? 'SSH'
+                                    : connection.protocol.toUpperCase()}{' '}
+                                  • 最后使用: {new Date(connection.lastUsed).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })()}
+
+                        <div className="flex items-center space-x-2">
+                          {isConnecting === connection.id && (
+                            <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                          )}
+                          <button
+                            onClick={disabled ? undefined : () => editConnection(connection)}
+                            className={`p-1 rounded transition-colors ${
+                              disabled
+                                ? 'text-gray-400 cursor-not-allowed'
+                                : 'text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300'
+                            }`}
+                            title={disabled ? '正在连接，暂不可编辑' : '编辑'}
+                            aria-disabled={disabled}
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={disabled ? undefined : () => deleteConnection(connection.id)}
+                            className={`p-1 rounded transition-colors ${
+                              disabled
+                                ? 'text-gray-400 cursor-not-allowed'
+                                : 'text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300'
+                            }`}
+                            title={disabled ? '正在连接，暂不可删除' : '删除'}
+                            aria-disabled={disabled}
+                          >
+                            🗑️
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </div>
@@ -310,7 +341,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 transition-colors"
                     >
                       <option value="ftp">FTP</option>
-                      <option value="sftp">SFTP</option>
+                      <option value="sftp">SSH</option>
                     </select>
                   </div>
 

@@ -34,6 +34,40 @@ export class ConnectionManager {
   constructor() {
     this.ftpService = new FTPService()
     this.sftpService = new SFTPService()
+    // Listen to underlying service errors and suppress common network reset errors
+    try {
+      this.ftpService.on('error', (err: Error) => {
+        try {
+          const msg = err && err.message ? err.message : String(err)
+          if (msg.includes('ECONNRESET')) {
+            console.warn('FTPService error ECONNRESET ignored')
+          } else {
+            console.error('FTPService error ->', msg)
+          }
+        } catch {
+          /* ignore */
+        }
+      })
+    } catch {
+      /* ignore */
+    }
+
+    try {
+      this.sftpService.on('error', (err: Error) => {
+        try {
+          const msg = err && err.message ? err.message : String(err)
+          if (msg.includes('ECONNRESET')) {
+            console.warn('SFTPService error ECONNRESET ignored')
+          } else {
+            console.error('SFTPService error ->', msg)
+          }
+        } catch {
+          /* ignore */
+        }
+      })
+    } catch {
+      /* ignore */
+    }
   }
 
   // 事件代理方法

@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { ConnectionManager } from './connection-manager'
+import { sshService } from './ssh-service'
 import { stat, readdir, writeFile, mkdir, unlink, rmdir, rename } from 'fs/promises'
 import { homedir } from 'os'
 import type {
@@ -13,6 +14,7 @@ import type {
   LocalFileItem,
   LocalDirectoryResult
 } from '../types'
+import type { SSHCredentials } from '../types'
 
 // 创建连接管理器实例
 const connectionManager = new ConnectionManager()
@@ -54,6 +56,30 @@ function createWindow(): void {
   connectionManager.on('transferProgress', (progress) => {
     mainWindow?.webContents.send('transferProgress', progress)
   })
+
+  // SSH 服务数据转发
+  sshService.on('data', (data: string) => {
+    try {
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[main] ssh:data preview ->', data.slice(0, 200))
+      }
+    } catch {
+      /* ignore */
+    }
+    mainWindow?.webContents.send('ssh:data', data)
+  })
+
+  // 捕获 sshService 的错误，避免未处理的 'error' 事件导致进程异常退出
+  sshService.on('error', (err: Error) => {
+    try {
+      console.warn(
+        '[ssh-service] error (caught) ->',
+        err && err.message ? err.message : String(err)
+      )
+    } catch {
+      /* ignore */
+    }
+  })
 }
 
 // This method will be called when Electron has finished
@@ -70,12 +96,61 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  // 全局异常防护，记录未捕获异常/拒绝并在常见网络重置错误上忽略，以避免系统弹窗
+  process.on('uncaughtException', (err: Error) => {
+    try {
+      const msg = err && err.message ? err.message : String(err)
+      if (msg.includes('ECONNRESET')) {
+        console.warn('[process] uncaughtException ECONNRESET ignored ->', msg)
+      } else {
+        console.error('[process] uncaughtException ->', msg)
+      }
+    } catch {
+      /* ignore */
+    }
+  })
+
+  process.on('unhandledRejection', (reason) => {
+    try {
+      const msg = reason instanceof Error ? reason.message : String(reason)
+      if (msg.includes('ECONNRESET')) {
+        console.warn('[process] unhandledRejection ECONNRESET ignored ->', msg)
+      } else {
+        console.error('[process] unhandledRejection ->', msg)
+      }
+    } catch {
+      /* ignore */
+    }
+  })
+
   // FTP连接处理
   ipcMain.handle(
     'ftp:connect',
     async (_, credentials: FTPCredentials): Promise<FTPConnectionResult> => {
       try {
-        return await connectionManager.connect(credentials)
+        const result = await connectionManager.connect(credentials)
+
+        // If this is an SFTP connection, also attempt to open an SSH shell for the terminal
+        if (result.success && credentials.protocol === 'sftp') {
+          try {
+            const sshRes = await sshService.connect({
+              host: credentials.host,
+              port: credentials.port,
+              username: credentials.username,
+              password: credentials.password
+            })
+            if (!sshRes.success) {
+              console.warn('SSH shell connection failed:', sshRes.error)
+              // append message but keep primary SFTP connection result
+              if (!result.message) result.message = ''
+              result.message += ` SSH shell: ${sshRes.error || 'failed'}`
+            }
+          } catch (err) {
+            console.warn('SSH shell connect attempt threw:', err)
+          }
+        }
+
+        return result
       } catch (error) {
         console.error('连接失败:', error)
         return {
@@ -87,7 +162,18 @@ app.whenReady().then(() => {
   )
 
   ipcMain.handle('ftp:disconnect', async (): Promise<void> => {
-    return await connectionManager.disconnect()
+    try {
+      await connectionManager.disconnect()
+    } catch (err) {
+      console.warn('[main] ftp:disconnect error ->', err)
+    } finally {
+      // Ensure SSH shell is also closed when the user requests an FTP disconnect
+      try {
+        await sshService.disconnect()
+      } catch (err) {
+        console.warn('[main] sshService.disconnect error ->', err)
+      }
+    }
   })
 
   ipcMain.handle(
@@ -176,6 +262,34 @@ app.whenReady().then(() => {
 
   ipcMain.handle('ftp:get-current-credentials', (): FTPCredentials | null => {
     return connectionManager.getCurrentCredentials()
+  })
+
+  // SSH IPC handlers
+  ipcMain.handle('ssh:connect', async (_, credentials: SSHCredentials) => {
+    try {
+      const res = await sshService.connect(credentials)
+      return res
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'ssh connect error' }
+    }
+  })
+
+  ipcMain.handle('ssh:disconnect', async () => {
+    try {
+      await sshService.disconnect()
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'ssh disconnect error' }
+    }
+  })
+
+  ipcMain.handle('ssh:send', async (_, data: string) => {
+    try {
+      await sshService.send(data)
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'ssh send error' }
+    }
   })
 
   // 远程文件管理操作（创建、删除、重命名）

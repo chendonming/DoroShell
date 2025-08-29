@@ -41,6 +41,23 @@ export class FTPService extends EventEmitter {
       }
 
       this.client = new Client()
+      try {
+        // forward underlying client errors to this service emitter
+        // basic-ftp's Client exposes an event interface; cast conservatively
+        const emitterLike = this.client as unknown as { on?: (ev: string, cb: (...args: unknown[]) => void) => void }
+        if (emitterLike && typeof emitterLike.on === 'function') {
+          emitterLike.on('error', (...args: unknown[]) => {
+            try {
+              const e = (args && args[0]) as Error
+              this.emit('error', e)
+            } catch {
+              /* ignore */
+            }
+          })
+        }
+      } catch {
+        /* ignore */
+      }
       this.client.ftp.verbose = true
 
       await this.client.access({
@@ -73,7 +90,16 @@ export class FTPService extends EventEmitter {
 
   async disconnect(): Promise<void> {
     if (this.client) {
-      this.client.close()
+      try {
+        this.client.close()
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('ECONNRESET')) {
+          console.warn('FTP disconnect ECONNRESET ignored')
+        } else {
+          console.error('FTP client close error:', err)
+        }
+      }
       this.client = null
     }
     this.isConnected = false
