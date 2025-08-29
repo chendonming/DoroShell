@@ -3,6 +3,7 @@ import ConnectionManager from './ConnectionManager'
 import LocalFileExplorer from './LocalFileExplorer'
 import RemoteFileExplorer, { type RemoteFileExplorerRef } from './RemoteFileExplorer'
 import FileTransfer from './FileTransfer'
+import Modal from './Modal'
 import type { FTPCredentials, TransferItem, TransferProgress } from '../../../types'
 
 const FTPManager: React.FC = () => {
@@ -12,10 +13,15 @@ const FTPManager: React.FC = () => {
   const [transfers, setTransfers] = useState<TransferItem[]>([])
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [showConnectionManager, setShowConnectionManager] = useState(false)
-  const [showTransferPanel, setShowTransferPanel] = useState(false)
+  const [showTransferModal, setShowTransferModal] = useState(false)
   const [localCurrentPath, setLocalCurrentPath] = useState<string>('')
   const remoteFileExplorerRef = useRef<RemoteFileExplorerRef>(null)
 
+  // 防止在未连接时误触发后在连接后自动弹出 modal：
+  // 任何连接状态变化时都关闭传输 modal，用户可在连接后手动打开
+  useEffect(() => {
+    setShowTransferModal(false)
+  }, [isConnected])
   useEffect(() => {
     // 检查并设置初始主题
     const savedTheme = localStorage.getItem('theme')
@@ -276,16 +282,19 @@ const FTPManager: React.FC = () => {
               >
                 🔌 连接
               </button>
-
               <button
-                onClick={() => setShowTransferPanel(!showTransferPanel)}
-                className={`${
-                  showTransferPanel ? 'bg-white/30 border-white/50' : 'bg-white/20 border-white/30'
-                } hover:bg-white/30 text-white border px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2`}
-                title={showTransferPanel ? '隐藏传输面板' : '显示传输面板'}
+                onClick={() => {
+                  if (isConnected) {
+                    setShowTransferModal(true)
+                  } else {
+                    // 如果未连接，打开连接管理
+                    setShowConnectionManager(true)
+                  }
+                }}
+                className={`bg-white/20 border-white/30 hover:bg-white/30 text-white border px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2`}
+                title={isConnected ? '显示传输' : '请先连接'}
               >
-                {showTransferPanel ? '📤' : '📥'} 传输{' '}
-                {transfers.length > 0 && `(${transfers.length})`}
+                📥 传输 {transfers.length > 0 && `(${transfers.length})`}
               </button>
             </div>
           </div>
@@ -345,16 +354,18 @@ const FTPManager: React.FC = () => {
           {isConnected ? (
             <>
               {/* Remote File Explorer */}
-              <div className={`${showTransferPanel ? 'flex-1' : 'h-full'}`}>
+              <div className={`flex-1`}>
                 <RemoteFileExplorer ref={remoteFileExplorerRef} onAddTransfer={addRemoteTransfer} />
               </div>
 
-              {/* Transfer Panel - Integrated as bottom section */}
-              {showTransferPanel && (
-                <div className="h-64 border-t border-gray-200 dark:border-gray-700 animate-slide-in">
-                  <FileTransfer transfers={transfers} onRemoveTransfer={removeTransfer} />
-                </div>
-              )}
+              {/* Transfer Modal (popup) - 使用抽离组件 */}
+              <Modal
+                isOpen={showTransferModal}
+                onClose={() => setShowTransferModal(false)}
+                title="传输"
+              >
+                <FileTransfer transfers={transfers} onRemoveTransfer={removeTransfer} />
+              </Modal>
             </>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
