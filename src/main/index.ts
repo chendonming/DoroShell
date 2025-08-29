@@ -256,9 +256,41 @@ app.whenReady().then(() => {
     return connectionManager.getCurrentPath()
   })
 
-  ipcMain.handle('ftp:get-connection-status', (): boolean => {
-    return connectionManager.getConnectionStatus()
-  })
+  ipcMain.handle(
+    'ftp:get-connection-status',
+    (): { connected: boolean; protocols: Array<'ftp' | 'sftp' | 'ssh'> } => {
+      try {
+        const protocols: Array<'ftp' | 'sftp' | 'ssh'> = []
+        const cmConnected = connectionManager.getConnectionStatus()
+        if (cmConnected) {
+          // If connection manager has a current protocol, include it
+          const proto = connectionManager.getCurrentProtocol()
+          if (proto === 'ftp') protocols.push('ftp')
+          if (proto === 'sftp') protocols.push('sftp')
+        }
+
+        // SSH shell presence should be represented separately
+        if (sshService.getConnectionStatus()) {
+          // only push 'ssh' if not already present
+          if (!protocols.includes('ssh')) protocols.push('ssh')
+        }
+
+        const connected = cmConnected || sshService.getConnectionStatus()
+
+        return {
+          connected,
+          protocols
+        }
+      } catch (err) {
+        try {
+          console.warn('[main] get-connection-status error ->', err)
+        } catch {
+          /* ignore */
+        }
+        return { connected: false, protocols: [] }
+      }
+    }
+  )
 
   ipcMain.handle('ftp:get-current-credentials', (): FTPCredentials | null => {
     return connectionManager.getCurrentCredentials()

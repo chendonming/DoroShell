@@ -87,12 +87,16 @@ const FTPManager: React.FC = () => {
   const checkConnectionStatus = async (): Promise<void> => {
     try {
       const status = await window.api.ftp.getConnectionStatus()
-      setIsConnected(status)
+      const connected = status?.connected ?? false
+      setIsConnected(connected)
 
-      if (status) {
+      if (connected) {
         const credentials = await window.api.ftp.getCurrentCredentials()
         if (credentials) {
           setCurrentServer(`${credentials.username}@${credentials.host}`)
+          setConnectionStatus('已连接')
+        } else {
+          setCurrentServer('')
           setConnectionStatus('已连接')
         }
       } else {

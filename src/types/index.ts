@@ -132,13 +132,21 @@ export interface FTPAPI {
     transferId?: string
   ) => Promise<TransferResult>
   getCurrentPath: () => Promise<string>
-  getConnectionStatus: () => Promise<boolean>
+  // 返回统一的连接状态对象，包含是否已连接以及可用协议列表（例如 ['ssh','sftp']）
+  getConnectionStatus: () => Promise<ConnectionStatus>
   getCurrentCredentials: () => Promise<FTPCredentials | null>
   onTransferProgress: (callback: (progress: TransferProgress) => void) => () => void
   createDirectory: (remotePath: string) => Promise<{ success: boolean; error?: string }>
   deleteFile: (remotePath: string) => Promise<{ success: boolean; error?: string }>
   deleteDirectory: (remotePath: string) => Promise<{ success: boolean; error?: string }>
   renameFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>
+}
+
+// 统一的连接状态表示
+export interface ConnectionStatus {
+  connected: boolean
+  // 可用协议，例如 ['sftp'] 或 ['ssh'] 或 ['ssh','sftp']
+  protocols: Array<'ftp' | 'sftp' | 'ssh'>
 }
 
 // SSH Terminal related types

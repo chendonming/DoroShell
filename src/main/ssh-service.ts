@@ -5,6 +5,11 @@ export class SSHService extends EventEmitter {
   private conn: Client | null = null
   private _stream?: NodeJS.WritableStream
 
+  // expose whether SSH service is connected
+  getConnectionStatus(): boolean {
+    return this.conn !== null
+  }
+
   connect(options: {
     host: string
     port: number
@@ -27,12 +32,67 @@ export class SSHService extends EventEmitter {
         const ptyOpts = { term: 'xterm', cols: 80, rows: 24 }
         try {
           const cmd = `export PROMPT_COMMAND='DIR=$(basename "$PWD"); [ "$PWD" = "/" ] && DIR=""; PS1="[$(whoami)@$(hostname -s) \${DIR}]# "' ; exec /bin/bash -l`
+
+          let resolved = false
+          const doResolve = (res: { success: boolean; error?: string }): void => {
+            if (resolved) return
+            resolved = true
+            resolve(res)
+          }
+
+          const fallbackToShell = (): void => {
+            if (!this.conn) {
+              doResolve({ success: false, error: 'No connection available for fallback' })
+              return
+            }
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('[ssh-service] falling back to interactive shell')
+            }
+            this.conn.shell({ pty: ptyOpts }, (err2, shellStream) => {
+              if (err2) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.debug('[ssh-service] shell open error ->', err2.message)
+                }
+                return doResolve({ success: false, error: err2.message })
+              }
+
+              if (process.env.NODE_ENV === 'development') {
+                console.debug('[ssh-service] shell opened')
+              }
+
+              let firstDataShell = true
+              shellStream.on('data', (chunk: Buffer) => {
+                const s = chunk.toString()
+                if (process.env.NODE_ENV === 'development') {
+                  if (firstDataShell) {
+                    console.debug('[ssh-service] first shell data preview ->', s.slice(0, 200))
+                    firstDataShell = false
+                  } else {
+                    console.debug('[ssh-service] shell data preview ->', s.slice(0, 200))
+                  }
+                }
+                this.emit('data', s)
+              })
+
+              shellStream.on('close', () => {
+                if (process.env.NODE_ENV === 'development') {
+                  console.debug('[ssh-service] shell closed')
+                }
+                this.emit('close')
+              })
+
+              this._stream = shellStream
+              return doResolve({ success: true })
+            })
+          }
+
           this.conn?.exec(cmd, { pty: ptyOpts }, (err, stream) => {
             if (err) {
               if (process.env.NODE_ENV === 'development') {
                 console.debug('[ssh-service] exec open error ->', err.message)
               }
-              resolve({ success: false, error: err.message })
+              // 尝试回退到交互式 shell（适配 Windows OpenSSH）
+              fallbackToShell()
               return
             }
 
@@ -41,6 +101,7 @@ export class SSHService extends EventEmitter {
             }
 
             let firstData = true
+            let fellback = false
             stream.on('data', (chunk: Buffer) => {
               const s = chunk.toString()
               if (process.env.NODE_ENV === 'development') {
@@ -51,6 +112,31 @@ export class SSHService extends EventEmitter {
                   console.debug('[ssh-service] data preview ->', s.slice(0, 200))
                 }
               }
+
+              // Detect Windows shell message for unsupported `export` (e.g. "'export' is not recognized as an internal or external command")
+              if (!fellback) {
+                const lowered = s.toLowerCase()
+                if (
+                  lowered.includes('is not recognized as an internal or external command') ||
+                  lowered.includes('export: command not found') ||
+                  lowered.includes('command not found')
+                ) {
+                  fellback = true
+                  try {
+                    // destroy/close current stream and fallback
+                    try {
+                      stream.close()
+                    } catch {
+                      // ignore
+                    }
+                    fallbackToShell()
+                    return
+                  } catch {
+                    // ignore fallback errors
+                  }
+                }
+              }
+
               this.emit('data', s)
             })
 
@@ -64,7 +150,7 @@ export class SSHService extends EventEmitter {
             // 将 stream 保存到实例以便 send 使用
             this._stream = stream
 
-            resolve({ success: true })
+            doResolve({ success: true })
           })
         } catch (err) {
           if (process.env.NODE_ENV === 'development') {

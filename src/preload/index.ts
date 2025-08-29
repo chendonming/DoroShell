@@ -43,7 +43,8 @@ const api: ElectronAPI = {
 
     getCurrentPath: (): Promise<string> => ipcRenderer.invoke('ftp:get-current-path'),
 
-    getConnectionStatus: (): Promise<boolean> => ipcRenderer.invoke('ftp:get-connection-status'),
+    getConnectionStatus: (): Promise<import('../types').ConnectionStatus> =>
+      ipcRenderer.invoke('ftp:get-connection-status'),
 
     getCurrentCredentials: (): Promise<FTPCredentials | null> =>
       ipcRenderer.invoke('ftp:get-current-credentials'),

@@ -84,7 +84,8 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     const loadRemoteFiles = useCallback(async (): Promise<void> => {
       setLoading(true)
       try {
-        const isConnected = await window.api.ftp.getConnectionStatus()
+        const status = await window.api.ftp.getConnectionStatus()
+        const isConnected = status?.connected ?? false
         if (!isConnected) {
           setFiles([])
           return
@@ -131,7 +132,8 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
         setLoading(true)
         try {
           // 检查是否已连接
-          const isConnected = await window.api.ftp.getConnectionStatus()
+          const status = await window.api.ftp.getConnectionStatus()
+          const isConnected = status?.connected ?? false
           if (!isConnected) {
             setFiles([])
             setLoading(false)
@@ -520,7 +522,12 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       closeContextMenu()
     }
 
-    const getContextMenuItems = (isConnected: boolean): CtxItem[] => {
+    const getContextMenuItems = (status: {
+      connected: boolean
+      protocols: Array<'ftp' | 'sftp' | 'ssh'>
+    }): CtxItem[] => {
+      const isConnected = status?.connected ?? false
+      const protocols = status?.protocols ?? []
       // Only allow modify actions when we have a connection and a valid target/selection
       const canModify = isConnected && (!!ctxTargetRef.current || selectedFiles.size > 0)
       const hasSelectedFiles = selectedFiles.size > 0
@@ -595,7 +602,11 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
           }
         },
         disabled: !canModify,
-        disabledReason: !isConnected ? '未连接到 FTP/SFTP，无法重命名' : '请选择一个要重命名的项',
+        disabledReason: !isConnected
+          ? '未连接到 FTP/SFTP，无法重命名'
+          : protocols.length === 1 && protocols[0] === 'ssh'
+            ? '仅通过 SSH shell 提供文件操作（兼容），请选择一个要重命名的项'
+            : '请选择一个要重命名的项',
         icon: '✏️'
       })
 
@@ -640,8 +651,12 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             closeContextMenu()
           }
         },
-  disabled: !canModify,
-  disabledReason: !isConnected ? '未连接到 FTP/SFTP，无法删除' : '请选择要删除的项',
+        disabled: !canModify,
+        disabledReason: !isConnected
+          ? '未连接到 FTP/SFTP，无法删除'
+          : protocols.length === 1 && protocols[0] === 'ssh'
+            ? '仅通过 SSH shell 提供文件操作（兼容），删除可能失败'
+            : '请选择要删除的项',
         icon: '🗑️'
       })
 
@@ -683,8 +698,12 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             closeContextMenu()
           }
         },
-  disabled: !(isConnected && (hasSelectedFiles || ctxTargetRef.current)),
-  disabledReason: !isConnected ? '未连接到 FTP/SFTP，无法下载' : '请选择要下载的文件',
+        disabled: !(isConnected && (hasSelectedFiles || ctxTargetRef.current)),
+        disabledReason: !isConnected
+          ? '未连接到 FTP/SFTP，无法下载'
+          : protocols.length === 1 && protocols[0] === 'ssh'
+            ? '仅通过 SSH shell 提供文件操作（兼容），下载可能失败'
+            : '请选择要下载的文件',
         icon: '⬇️'
       })
 
@@ -700,13 +719,13 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       // 查询当前连接状态，决定哪些菜单项可用
       window.api.ftp
         .getConnectionStatus()
-        .then((isConnected) => {
-          setCtxItems(getContextMenuItems(isConnected))
+        .then((status) => {
+          setCtxItems(getContextMenuItems(status))
           setCtxVisible(true)
         })
         .catch(() => {
           // 如果查询失败，保守处理为未连接
-          setCtxItems(getContextMenuItems(false))
+          setCtxItems(getContextMenuItems({ connected: false, protocols: [] }))
           setCtxVisible(true)
         })
     }
