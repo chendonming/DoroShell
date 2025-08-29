@@ -185,6 +185,16 @@ export interface ElectronAPI {
   windowControls?: WindowControlsAPI
 }
 
+// System-level helpers exposed to renderer
+export interface SystemAPI {
+  getFonts: () => Promise<{ success: boolean; fonts: string[] }>
+}
+
+// extend ElectronAPI to include system api
+export interface ElectronAPI {
+  system?: SystemAPI
+}
+
 declare global {
   interface Window {
     api: ElectronAPI

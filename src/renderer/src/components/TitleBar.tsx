@@ -11,6 +11,7 @@ type Props = {
   onShowTransfers: () => void
   onToggleTerminal: () => void
   onOpenCommandManager: () => void
+  onOpenSettings?: () => void
   onDisconnect: () => void
 }
 
@@ -25,6 +26,7 @@ const TitleBar: React.FC<Props> = ({
   onShowTransfers,
   onToggleTerminal,
   onOpenCommandManager,
+  onOpenSettings,
   onDisconnect
 }) => {
   const [isMaximized, setIsMaximized] = useState(false)
@@ -153,20 +155,18 @@ const TitleBar: React.FC<Props> = ({
                 <span aria-hidden>📋</span>
                 <span className="ml-2 hidden sm:inline">命令</span>
               </button>
+              <button
+                onClick={() => onOpenSettings && onOpenSettings()}
+                className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2 titlebar-button"
+                title="设置"
+                aria-label="设置"
+              >
+                <span aria-hidden>⚙️</span>
+                <span className="ml-2 hidden sm:inline">设置</span>
+              </button>
             </div>
 
             <div className="flex items-center space-x-2">
-              <button
-                onClick={onToggleDarkMode}
-                className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2 titlebar-button"
-                title={isDarkMode ? '切换到浅色模式' : '切换到深色模式'}
-                aria-label={isDarkMode ? '切换到浅色模式' : '切换到深色模式'}
-                aria-pressed={isDarkMode}
-              >
-                <span aria-hidden>{isDarkMode ? '☀️' : '🌙'}</span>
-                <span className="ml-2 hidden sm:inline">{isDarkMode ? '浅色' : '深色'}</span>
-              </button>
-
               {isConnected && (
                 <button
                   onClick={onDisconnect}

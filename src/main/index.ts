@@ -620,6 +620,53 @@ app.whenReady().then(() => {
     }
   })
 
+  // 返回系统字体列表（简单实现：扫描常见系统字体目录并返回文件名的基名作为字体候选）
+  ipcMain.handle('system:get-fonts', async function (): Promise<{ success: boolean; fonts: string[] }> {
+    try {
+      const os = await import('os')
+      const fs = await import('fs/promises')
+      const path = await import('path')
+
+      const dirs: string[] = []
+      const platform = process.platform
+      if (platform === 'win32') {
+        dirs.push(path.join(process.env['WINDIR'] || 'C:\\Windows', 'Fonts'))
+      } else if (platform === 'darwin') {
+        dirs.push('/Library/Fonts', '/System/Library/Fonts', path.join(os.homedir(), 'Library', 'Fonts'))
+      } else {
+        // linux and others
+        dirs.push('/usr/share/fonts', '/usr/local/share/fonts', path.join(os.homedir(), '.fonts'))
+      }
+
+      const fontSet = new Set<string>()
+
+      for (const dir of dirs) {
+        try {
+          const files = await fs.readdir(dir)
+          for (const f of files) {
+            // ignore hidden files
+            if (!f || f.startsWith('.')) continue
+            const ext = path.extname(f).toLowerCase()
+            if (['.ttf', '.otf', '.ttc', '.woff', '.woff2'].includes(ext)) {
+              const name = path.basename(f, ext)
+              // make name more friendly: replace '_' and '-' with space
+              const friendly = name.replace(/[_-]+/g, ' ')
+              fontSet.add(friendly)
+            }
+          }
+        } catch {
+          // ignore missing dirs
+        }
+      }
+
+      const fonts = Array.from(fontSet).sort((a, b) => a.localeCompare(b))
+      return { success: true, fonts }
+    } catch (error) {
+      console.warn('system:get-fonts failed ->', error)
+      return { success: false, fonts: [] }
+    }
+  })
+
   createWindow()
 
   app.on('activate', function () {

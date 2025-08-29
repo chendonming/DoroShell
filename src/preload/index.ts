@@ -108,6 +108,13 @@ const api: ElectronAPI = {
     showItemInFolder: (path: string): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('path:show-item-in-folder', path)
   }
+
+  ,
+
+  // System related helper APIs
+  system: {
+    getFonts: (): Promise<{ success: boolean; fonts: string[] }> => ipcRenderer.invoke('system:get-fonts')
+  }
 }
 
 // Window control API

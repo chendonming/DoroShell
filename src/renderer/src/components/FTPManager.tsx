@@ -4,6 +4,7 @@ import LocalFileExplorer from './LocalFileExplorer'
 import RemoteFileExplorer, { type RemoteFileExplorerRef } from './RemoteFileExplorer'
 import FileTransfer from './FileTransfer'
 import Modal from './Modal'
+import SettingsPanel from './SettingsPanel'
 import TerminalPanel from './TerminalPanel'
 import CommandManager from './CommandManager'
 import TitleBar from './TitleBar'
@@ -17,6 +18,9 @@ const FTPManager: React.FC = () => {
   // track pending counts per batchId to avoid multiple refreshes for batch uploads
   const batchPending = useRef<Record<string, number>>({})
   const [isDarkMode, setIsDarkMode] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [fontPrimary, setFontPrimary] = useState<string>('')
+  const [fontFallback, setFontFallback] = useState<string>('')
   const [showConnectionManager, setShowConnectionManager] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [terminalOpen, setTerminalOpen] = useState(false)
@@ -57,12 +61,17 @@ const FTPManager: React.FC = () => {
   }, [isConnected])
   useEffect(() => {
     // 检查并设置初始主题
-    const savedTheme = localStorage.getItem('theme')
+  const savedTheme = localStorage.getItem('theme')
+  const savedPrimary = localStorage.getItem('fontPrimary') || ''
+  const savedFallback = localStorage.getItem('fontFallback') || ''
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     const shouldBeDark = savedTheme === 'dark' || (!savedTheme && prefersDark)
 
     setIsDarkMode(shouldBeDark)
     updateTheme(shouldBeDark)
+  if (savedPrimary || savedFallback) applyFonts(savedPrimary, savedFallback)
+  setFontPrimary(savedPrimary)
+  setFontFallback(savedFallback)
 
     // 检查连接状态
     checkConnectionStatus()
@@ -81,6 +90,28 @@ const FTPManager: React.FC = () => {
       root.classList.remove('dark')
     }
     localStorage.setItem('theme', dark ? 'dark' : 'light')
+  }
+
+  const applyFonts = (primary: string, fallback: string): void => {
+    const root = document.documentElement
+    let family = ''
+    if (primary) {
+      family += primary
+    }
+    if (fallback) {
+      family += (family ? ', ' : '') + fallback
+    }
+    if (!family) {
+  // reset to default by removing inline CSS variable so the CSS :root value takes effect
+  root.style.removeProperty('--app-font-family')
+      localStorage.removeItem('fontPrimary')
+      localStorage.removeItem('fontFallback')
+      return
+    }
+
+    root.style.setProperty('--app-font-family', family)
+    localStorage.setItem('fontPrimary', primary)
+    localStorage.setItem('fontFallback', fallback)
   }
 
   const toggleDarkMode = (): void => {
@@ -359,14 +390,36 @@ const FTPManager: React.FC = () => {
         connectionStatus={connectionStatus}
         currentServer={currentServer}
         transfersCount={transfers.length}
-        isDarkMode={isDarkMode}
-        onToggleDarkMode={toggleDarkMode}
+  isDarkMode={isDarkMode}
+  onToggleDarkMode={toggleDarkMode}
+  onOpenSettings={() => setShowSettings(true)}
         onOpenConnectionManager={() => setShowConnectionManager(true)}
         onShowTransfers={() => setShowTransferModal(true)}
         onToggleTerminal={() => setTerminalOpen((v) => !v)}
         onOpenCommandManager={() => setShowCommandManager(true)}
         onDisconnect={handleDisconnect}
       />
+
+      {/* Settings Modal */}
+      {/* lazy render SettingsPanel */}
+      <Modal isOpen={showSettings} onClose={() => setShowSettings(false)} title="设置">
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          theme={isDarkMode ? 'dark' : 'light'}
+          onChangeTheme={(t) => {
+            const dark = t === 'dark'
+            setIsDarkMode(dark)
+            updateTheme(dark)
+          }}
+          fontPrimary={fontPrimary}
+          fontFallback={fontFallback}
+          onChangeFonts={(p, f) => {
+            setFontPrimary(p)
+            setFontFallback(f)
+            applyFonts(p, f)
+          }}
+        />
+      </Modal>
 
       {/* toolbar moved to TitleBar component */}
 
