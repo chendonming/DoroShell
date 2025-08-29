@@ -311,6 +311,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
                 // ignore per-char send errors
               }
             }
+            // ensure terminal has focus so user can press Enter immediately
+            try {
+              term?.focus()
+            } catch {
+              /* ignore */
+            }
             // fallback to clear markers after a short time
             setTimeout(() => {
               try {
@@ -326,6 +332,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
             // not connected -> clear line then visually write command into local terminal
             try {
               term?.write('\x1b[2K\r' + cmd)
+              // focus terminal so user can press Enter to execute locally
+              try {
+                term?.focus()
+              } catch {
+                /* ignore */
+              }
             } catch {
               // ignore
             }
