@@ -1,6 +1,6 @@
-# FTP Manager - 现代化文件传输工具
+# DoroShell - 现代化远程工具
 
-一个使用 Electron + React + TypeScript 构建的现代化 FTP 文件管理工具，类似 FileZilla 的功能。
+一个使用 Electron + React + TypeScript 构建的现代化远程工具，实现了对FTP、SFTP、SSH的支持
 
 ![](./resources/welcome.jpg)
 
@@ -8,7 +8,7 @@
 
 ### 🔌 连接管理
 
-- 支持 FTP 和 SFTP 协议
+- 支持 FTP, SFTP, SSH 协议
 - 连接状态实时显示
 - 安全的凭据管理
 
