@@ -44,7 +44,9 @@ export class SFTPService extends EventEmitter {
 
       try {
         // forward underlying errors
-        const emitterLike = this.client as unknown as { on?: (ev: string, cb: (...args: unknown[]) => void) => void }
+        const emitterLike = this.client as unknown as {
+          on?: (ev: string, cb: (...args: unknown[]) => void) => void
+        }
         if (emitterLike && typeof emitterLike.on === 'function') {
           emitterLike.on('error', (...args: unknown[]) => {
             try {

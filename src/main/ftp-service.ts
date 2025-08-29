@@ -44,7 +44,9 @@ export class FTPService extends EventEmitter {
       try {
         // forward underlying client errors to this service emitter
         // basic-ftp's Client exposes an event interface; cast conservatively
-        const emitterLike = this.client as unknown as { on?: (ev: string, cb: (...args: unknown[]) => void) => void }
+        const emitterLike = this.client as unknown as {
+          on?: (ev: string, cb: (...args: unknown[]) => void) => void
+        }
         if (emitterLike && typeof emitterLike.on === 'function') {
           emitterLike.on('error', (...args: unknown[]) => {
             try {

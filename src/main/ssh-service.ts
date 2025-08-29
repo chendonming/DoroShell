@@ -1,6 +1,5 @@
 import { Client } from 'ssh2'
 import { EventEmitter } from 'events'
-import { Writable } from 'stream'
 
 export class SSHService extends EventEmitter {
   private conn: Client | null = null
@@ -40,10 +39,8 @@ export class SSHService extends EventEmitter {
             console.debug('[ssh-service] shell opened')
           }
 
-          let receivedAny = false
           let firstData = true
           stream.on('data', (chunk: Buffer) => {
-            receivedAny = true
             const s = chunk.toString()
             if (process.env.NODE_ENV === 'development') {
               if (firstData) {

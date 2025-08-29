@@ -40,8 +40,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     if (!isOpen) return
     if (!containerRef.current) return
 
-  // track whether we've already triggered a data-driven resize
-  let didDataResize = false
+    // track whether we've already triggered a data-driven resize
+    let didDataResize = false
 
     const term = new Terminal({
       cursorBlink: true,
@@ -99,10 +99,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       }
     })
 
-  // subscribe to ssh data from preload
+    // subscribe to ssh data from preload
     const electronApi = (window as unknown as Window & { api?: ElectronAPI }).api
 
-  const ensureFitAndResize = (): void => {
+    const ensureFitAndResize = (): void => {
       try {
         fit.fit()
         return

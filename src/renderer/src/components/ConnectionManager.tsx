@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import useConfirm from '../hooks/useConfirm'
 import { notify } from '../utils/notifications'
 import type { FTPCredentials, SavedFTPConnection } from '../../../types'
 
@@ -21,6 +22,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
     protocol: 'ftp'
   })
   const [isConnecting, setIsConnecting] = useState<string | null>(null)
+  const confirm = useConfirm()
 
   useEffect(() => {
     if (isOpen) {
@@ -99,7 +101,9 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
   }
 
   const deleteConnection = (id: string): void => {
-    if (confirm('Are you sure you want to delete this connection?')) {
+    ;(async () => {
+      const ok = await confirm({ message: 'Are you sure you want to delete this connection?' })
+      if (!ok) return
       try {
         const updatedConnections = savedConnections.filter((conn) => conn.id !== id)
         localStorage.setItem('ftpConnections', JSON.stringify(updatedConnections))
@@ -107,7 +111,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ isOpen, onClose, 
       } catch (error) {
         console.error('Failed to delete connection:', error)
       }
-    }
+    })()
   }
 
   const editConnection = (connection: SavedFTPConnection): void => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import useConfirm from '../hooks/useConfirm'
 import type { TransferItem } from '../../../types'
 import ContextMenu from './ContextMenu'
 import PromptDialog from './PromptDialog'
@@ -61,6 +62,7 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
   // 新创建的文件名，用于自动定位
   const [newlyCreatedItem, setNewlyCreatedItem] = useState<string | null>(null)
   const [highlightedItem, setHighlightedItem] = useState<string | null>(null)
+  const confirm = useConfirm()
 
   const updateCurrentPath = useCallback(
     (newPath: string): void => {
@@ -306,8 +308,8 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
       currentPath,
       filesToDelete
     })
-    const confirmDelete = confirm(`确定要删除 "${fileNames}" 吗？`)
-    if (!confirmDelete) return
+    const ok = await confirm({ message: `确定要删除 "${fileNames}" 吗？` })
+    if (!ok) return
 
     try {
       for (const fileName of filesToDelete) {

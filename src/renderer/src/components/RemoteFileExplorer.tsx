@@ -1,4 +1,5 @@
 import { useState, useEffect, useImperativeHandle, forwardRef, useCallback, useRef } from 'react'
+import useConfirm from '../hooks/useConfirm'
 import type { PathInputHandle } from './PathInput'
 import { notify } from '../utils/notifications'
 import type { TransferItem } from '../../../types'
@@ -69,6 +70,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     const [ctxY, setCtxY] = useState(0)
     const [ctxItems, setCtxItems] = useState<CtxItem[]>([])
     const ctxTargetRef = useRef<RemoteFileItem | null>(null)
+    const confirm = useConfirm()
 
     // 统一的排序函数：目录优先，然后按名称（不区分大小写）排序
     const sortRemoteFilesList = (list: RemoteFileItem[]): RemoteFileItem[] => {
@@ -603,7 +605,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
               return
             }
 
-            const ok = confirm(`确定要删除 "${targets.join('、')}" 吗？`)
+            const ok = await confirm({ message: `确定要删除 "${targets.join('、')}" 吗？` })
             if (!ok) return
 
             for (const t of targets) {
