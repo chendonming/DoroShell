@@ -299,7 +299,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
             // clear current input line then write locally so command is visible immediately
             try {
               // ESC[2K clears the entire line, \r returns carriage to start
-              term?.write('\x1b[2K\r' + cmd)
+              term?.write(cmd)
             } catch {
               /* ignore */
             }
