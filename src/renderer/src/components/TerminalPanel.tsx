@@ -90,7 +90,23 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       convertEol: true,
       theme: document.documentElement.classList.contains('dark') ? xtermDarkTheme : xtermLightTheme
     })
+    // 提前声明 fit/webgl 引用，避免在使用前重复声明
+    let fit: FitAddon | null = null
+    let webgl: any | null = null
+
     term.open(containerRef.current)
+    // 立即创建并加载 FitAddon，确保初始渲染阶段能精确计算 cols/rows
+    try {
+      fit = new FitAddon()
+      term.loadAddon(fit)
+      try {
+        ;(fit as any).fit()
+      } catch {
+        /* ignore initial fit errors */
+      }
+    } catch {
+      fit = null
+    }
     // ensure the terminal's top-level element fills the container
     try {
       const tEl = term.element as HTMLElement | null
@@ -106,10 +122,41 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     term.focus()
     termRef.current = term
 
-    // prefer WebGL renderer for better performance; fall back to fit addon when WebGL unavailable
-    let fit: FitAddon | null = null
-    let webgl: any | null = null
+    // 优先使用 WebGL 渲染；同时预加载 FitAddon 用于精确的 cols/rows 计算和回退
 
+    // 更新 WebGL canvas 的 CSS 和 backing buffer（按 devicePixelRatio）
+    // 作用：确保 canvas 的视觉区域与父容器尺寸一致，避免因像素缓冲未更新而产生恒定留白
+    const updateWebglCanvas = (): void => {
+      try {
+        const container = containerRef.current
+        if (!container) return
+        const canvas = container.querySelector('canvas') as HTMLCanvasElement | null
+        if (!canvas) return
+        // 使用像素值精确设置 canvas 大小，避免百分比计算或父层样式干扰
+        canvas.style.position = 'absolute'
+        canvas.style.left = '0'
+        canvas.style.top = '0'
+        canvas.style.width = `${container.clientWidth}px`
+        canvas.style.height = `${container.clientHeight}px`
+        canvas.style.display = 'block'
+        // 清除可能的 transform/padding/margin，防止渲染位移或裁切
+        canvas.style.transform = 'none'
+        canvas.style.margin = '0'
+        canvas.style.padding = '0'
+        // 将 drawing buffer 大小调整为 CSS 尺寸 * DPR，避免高 DPI 下渲染只占据部分像素
+        const dpr = window.devicePixelRatio || 1
+        const w = Math.max(1, Math.floor(container.clientWidth * dpr))
+        const h = Math.max(1, Math.floor(container.clientHeight * dpr))
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w
+          canvas.height = h
+        }
+      } catch {
+        /* 忽略错误 */
+      }
+    }
+
+    // 先尝试动态加载 WebGL addon，若失败回退（FitAddon 已由后续逻辑处理）
     ;(async () => {
       try {
         // dynamic import with vite-ignore so bundler won't fail if the package isn't installed
@@ -118,57 +165,21 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         webgl = new Webgl({ preserveDrawingBuffer: false })
         // activate will throw if WebGL context can't be created
         webgl.activate(term)
-        // ensure WebGL canvas (created by addon) fills the container
+
+        // 激活后让 FitAddon 先计算 cols/rows（若已加载），再更新 canvas backing buffer
         try {
-          // terminal element
-          const tEl = term.element as HTMLElement | null
-          if (tEl) {
-            tEl.style.position = 'absolute'
-            tEl.style.inset = '0'
-            tEl.style.width = '100%'
-            tEl.style.height = '100%'
-          }
-          // canvas created by the WebGL addon may be appended; ensure it fills container
-          const canvas = containerRef.current?.querySelector('canvas') as HTMLCanvasElement | null
-          if (canvas) {
-            // ensure CSS fills the parent
-            canvas.style.position = 'absolute'
-            canvas.style.inset = '0'
-            canvas.style.width = '100%'
-            canvas.style.height = '100%'
-            canvas.style.display = 'block'
-            // ensure the canvas drawing buffer matches the CSS size * devicePixelRatio
-            try {
-              const container = containerRef.current
-              if (container) {
-                const dpr = window.devicePixelRatio || 1
-                const w = Math.max(1, Math.floor(container.clientWidth * dpr))
-                const h = Math.max(1, Math.floor(container.clientHeight * dpr))
-                if (canvas.width !== w || canvas.height !== h) {
-                  canvas.width = w
-                  canvas.height = h
-                }
-              }
-            } catch {
-              /* ignore */
-            }
+          if (fit) {
+            ;(fit as any).fit()
           }
         } catch {
-          /* ignore */
+          /* ignore fit errors */
         }
+        // 调整 canvas 样式与像素缓冲
+        updateWebglCanvas()
+        // 再下一帧确保布局稳定后再次调整
+        requestAnimationFrame(updateWebglCanvas)
       } catch {
-        // WebGL failed or not installed -> load fit addon (keeps same behavior)
-        try {
-          fit = new FitAddon()
-          term.loadAddon(fit)
-          try {
-            fit.fit()
-          } catch {
-            /* ignore */
-          }
-        } catch {
-          /* ignore if fit addon fails */
-        }
+        // WebGL 不可用或未安装：不做额外处理，已有的 fit 回退逻辑会在后续执行
       }
     })()
 
@@ -192,7 +203,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     requestAnimationFrame(() => {
       if (fit) {
         try {
-          fit.fit()
+          ;(fit as any).fit()
+          // Fit 后确保 webgl canvas 的 backing buffer 同步
+          updateWebglCanvas()
           return
         } catch {
           // fall through to manual sizing
@@ -202,6 +215,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       if (dims) {
         try {
           term.resize(dims.cols, dims.rows)
+          updateWebglCanvas()
         } catch {
           /* ignore */
         }
@@ -234,7 +248,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       // if we have fit addon, use it; otherwise WebGL will handle resizing internally
       if (fit) {
         try {
-          fit.fit()
+          ;(fit as any).fit()
           return
         } catch {
           /* fallback to manual */
@@ -332,7 +346,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     const ro = new ResizeObserver(() => {
       if (fit) {
         try {
-          fit.fit()
+          ;(fit as any).fit()
+          // Fit 后同步 WebGL canvas backing buffer
+          updateWebglCanvas()
           return
         } catch {
           // fall through to manual sizing below
@@ -342,6 +358,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       if (!dims) return
       try {
         term.resize(dims.cols, dims.rows)
+        updateWebglCanvas()
       } catch {
         /* ignore resize errors */
       }
