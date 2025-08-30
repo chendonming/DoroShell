@@ -99,11 +99,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     try {
       fit = new FitAddon()
       term.loadAddon(fit)
-      try {
-        ;(fit as any).fit()
-      } catch {
-        /* ignore initial fit errors */
-      }
+      // 初始fit操作延迟到terminal完全准备好
+      // 不在这里立即调用fit，而是依赖后续的requestAnimationFrame调用
     } catch {
       fit = null
     }
@@ -122,7 +119,82 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     term.focus()
     termRef.current = term
 
-    // 优先使用 WebGL 渲染；同时预加载 FitAddon 用于精确的 cols/rows 计算和回退
+    // 安全的fit调用函数，确保terminal已完全初始化
+    const safeFit = (fitAddon: any): boolean => {
+      try {
+        // 基本检查：terminal和容器是否存在
+        const container = containerRef.current
+        if (!container || container.clientWidth <= 0 || container.clientHeight <= 0) {
+          return false
+        }
+
+        // 检查terminal基本状态
+        if (!term || !term.element) {
+          return false
+        }
+
+        // 检查terminal是否已经open并有有效的rows/cols
+        if (term.rows <= 0 || term.cols <= 0) {
+          return false
+        }
+
+        // 直接尝试fit，依赖try-catch捕获任何内部错误
+        fitAddon.fit()
+        return true
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('FitAddon fit() failed:', error)
+        }
+        return false
+      }
+    }
+
+    // 带重试的延迟fit函数
+    const delayedFitWithRetry = (fitAddon: any, maxRetries = 5, delay = 200): void => {
+      let retryCount = 0
+      const tryFit = (): void => {
+        if (safeFit(fitAddon)) {
+          updateWebglCanvas()
+          requestAnimationFrame(() => {
+            updateWebglCanvas()
+            try {
+              term.refresh(0, term.rows - 1)
+            } catch {
+              /* ignore refresh errors */
+            }
+          })
+          return
+        }
+
+        retryCount++
+        if (retryCount < maxRetries) {
+          // 使用更长的延迟，递增策略
+          setTimeout(tryFit, delay * retryCount) // 200ms, 400ms, 600ms, 800ms, 1000ms
+        } else {
+          // 重试失败，使用手动尺寸计算
+          const dims = measureChar()
+          if (dims) {
+            try {
+              term.resize(dims.cols, dims.rows)
+              updateWebglCanvas()
+              requestAnimationFrame(() => {
+                updateWebglCanvas()
+                try {
+                  term.refresh(0, term.rows - 1)
+                } catch {
+                  /* ignore refresh errors */
+                }
+              })
+            } catch {
+              /* ignore resize errors */
+            }
+          }
+        }
+      }
+
+      // 立即尝试一次，失败后启动重试
+      tryFit()
+    } // 优先使用 WebGL 渲染；同时预加载 FitAddon 用于精确的 cols/rows 计算和回退
 
     // 更新 WebGL canvas 的 CSS 和 backing buffer（按 devicePixelRatio）
     // 作用：确保 canvas 的视觉区域与父容器尺寸一致，避免因像素缓冲未更新而产生恒定留白
@@ -167,12 +239,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         webgl.activate(term)
 
         // 激活后让 FitAddon 先计算 cols/rows（若已加载），再更新 canvas backing buffer
-        try {
-          if (fit) {
-            ;(fit as any).fit()
-          }
-        } catch {
-          /* ignore fit errors */
+        if (fit) {
+          // WebGL激活后使用延迟fit确保稳定
+          setTimeout(() => delayedFitWithRetry(fit), 100)
         }
         // 调整 canvas 样式与像素缓冲
         updateWebglCanvas()
@@ -200,27 +269,30 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     }
 
     // initial resize / fit after open — ensures term internal layout is ready
-    requestAnimationFrame(() => {
+    // 使用延迟初始化确保terminal完全准备好
+    setTimeout(() => {
       if (fit) {
-        try {
-          ;(fit as any).fit()
-          // Fit 后确保 webgl canvas 的 backing buffer 同步
-          updateWebglCanvas()
-          return
-        } catch {
-          // fall through to manual sizing
+        delayedFitWithRetry(fit)
+      } else {
+        const dims = measureChar()
+        if (dims) {
+          try {
+            term.resize(dims.cols, dims.rows)
+            updateWebglCanvas()
+            requestAnimationFrame(() => {
+              updateWebglCanvas()
+              try {
+                term.refresh(0, term.rows - 1)
+              } catch {
+                /* ignore refresh errors */
+              }
+            })
+          } catch {
+            /* ignore */
+          }
         }
       }
-      const dims = measureChar()
-      if (dims) {
-        try {
-          term.resize(dims.cols, dims.rows)
-          updateWebglCanvas()
-        } catch {
-          /* ignore */
-        }
-      }
-    })
+    }, 150) // 给terminal更多时间完全初始化
 
     // subscribe to ssh data from preload
     const electronApi = (window as unknown as Window & { api?: ElectronAPI }).api
@@ -247,17 +319,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     const ensureFitAndResize = (): void => {
       // if we have fit addon, use it; otherwise WebGL will handle resizing internally
       if (fit) {
-        try {
-          ;(fit as any).fit()
+        const fitSuccessful = safeFit(fit)
+        if (fitSuccessful) {
+          // 确保 WebGL canvas 同步更新
+          updateWebglCanvas()
           return
-        } catch {
-          /* fallback to manual */
         }
+        // fit失败，fallback to manual
       }
       const dims = measureChar()
       if (!dims) return
       try {
         term.resize(dims.cols, dims.rows)
+        // 手动resize后也要更新WebGL canvas
+        updateWebglCanvas()
       } catch {
         /* ignore resize errors */
       }
@@ -344,24 +419,41 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     })
 
     const ro = new ResizeObserver(() => {
-      if (fit) {
-        try {
-          ;(fit as any).fit()
-          // Fit 后同步 WebGL canvas backing buffer
-          updateWebglCanvas()
-          return
-        } catch {
-          // fall through to manual sizing below
+      // 使用一个短暂的延迟确保DOM完全更新后再执行resize
+      requestAnimationFrame(() => {
+        if (fit) {
+          const fitSuccessful = safeFit(fit)
+          if (fitSuccessful) {
+            // Fit 后必须同步 WebGL canvas backing buffer
+            updateWebglCanvas()
+            // 再下一帧确保布局完全稳定
+            requestAnimationFrame(updateWebglCanvas)
+          } else {
+            // fall through to manual sizing below
+            const dims = measureChar()
+            if (dims) {
+              try {
+                term.resize(dims.cols, dims.rows)
+                updateWebglCanvas()
+                requestAnimationFrame(updateWebglCanvas)
+              } catch {
+                /* ignore resize errors */
+              }
+            }
+          }
+        } else {
+          const dims = measureChar()
+          if (dims) {
+            try {
+              term.resize(dims.cols, dims.rows)
+              updateWebglCanvas()
+              requestAnimationFrame(updateWebglCanvas)
+            } catch {
+              /* ignore resize errors */
+            }
+          }
         }
-      }
-      const dims = measureChar()
-      if (!dims) return
-      try {
-        term.resize(dims.cols, dims.rows)
-        updateWebglCanvas()
-      } catch {
-        /* ignore resize errors */
-      }
+      })
     })
 
     if (containerRef.current) ro.observe(containerRef.current)
