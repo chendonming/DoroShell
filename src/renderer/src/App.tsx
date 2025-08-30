@@ -1,7 +1,7 @@
-import FTPManager from './components/FTPManager'
+import DoroShell from './components/DoroShell'
 
 function App(): React.JSX.Element {
-  return <FTPManager />
+  return <DoroShell />
 }
 
 export default App

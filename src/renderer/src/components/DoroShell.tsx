@@ -10,7 +10,7 @@ import CommandManager from './CommandManager'
 import TitleBar from './TitleBar'
 import type { FTPCredentials, TransferItem, TransferProgress } from '../../../types'
 
-const FTPManager: React.FC = () => {
+const DoroShell: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState('未连接')
   const [currentServer, setCurrentServer] = useState<string>('')
@@ -526,4 +526,4 @@ const FTPManager: React.FC = () => {
   )
 }
 
-export default FTPManager
+export default DoroShell
