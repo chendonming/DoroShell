@@ -91,22 +91,86 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       theme: document.documentElement.classList.contains('dark') ? xtermDarkTheme : xtermLightTheme
     })
     term.open(containerRef.current)
+    // ensure the terminal's top-level element fills the container
+    try {
+      const tEl = term.element as HTMLElement | null
+      if (tEl) {
+        tEl.style.position = 'absolute'
+        tEl.style.inset = '0'
+        tEl.style.width = '100%'
+        tEl.style.height = '100%'
+      }
+    } catch {
+      /* ignore styling errors */
+    }
     term.focus()
     termRef.current = term
 
-    // load and attach fit addon for reliable fit behavior
-    const fit = new FitAddon()
-    try {
-      term.loadAddon(fit)
-      // perform initial fit
+    // prefer WebGL renderer for better performance; fall back to fit addon when WebGL unavailable
+    let fit: FitAddon | null = null
+    let webgl: any | null = null
+
+    ;(async () => {
       try {
-        fit.fit()
+        // dynamic import with vite-ignore so bundler won't fail if the package isn't installed
+        const mod = await import(/* @vite-ignore */ '@xterm/addon-webgl')
+        const Webgl = mod?.default ?? mod?.WebglAddon ?? mod
+        webgl = new Webgl({ preserveDrawingBuffer: false })
+        // activate will throw if WebGL context can't be created
+        webgl.activate(term)
+        // ensure WebGL canvas (created by addon) fills the container
+        try {
+          // terminal element
+          const tEl = term.element as HTMLElement | null
+          if (tEl) {
+            tEl.style.position = 'absolute'
+            tEl.style.inset = '0'
+            tEl.style.width = '100%'
+            tEl.style.height = '100%'
+          }
+          // canvas created by the WebGL addon may be appended; ensure it fills container
+          const canvas = containerRef.current?.querySelector('canvas') as HTMLCanvasElement | null
+          if (canvas) {
+            // ensure CSS fills the parent
+            canvas.style.position = 'absolute'
+            canvas.style.inset = '0'
+            canvas.style.width = '100%'
+            canvas.style.height = '100%'
+            canvas.style.display = 'block'
+            // ensure the canvas drawing buffer matches the CSS size * devicePixelRatio
+            try {
+              const container = containerRef.current
+              if (container) {
+                const dpr = window.devicePixelRatio || 1
+                const w = Math.max(1, Math.floor(container.clientWidth * dpr))
+                const h = Math.max(1, Math.floor(container.clientHeight * dpr))
+                if (canvas.width !== w || canvas.height !== h) {
+                  canvas.width = w
+                  canvas.height = h
+                }
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+        } catch {
+          /* ignore */
+        }
       } catch {
-        /* ignore */
+        // WebGL failed or not installed -> load fit addon (keeps same behavior)
+        try {
+          fit = new FitAddon()
+          term.loadAddon(fit)
+          try {
+            fit.fit()
+          } catch {
+            /* ignore */
+          }
+        } catch {
+          /* ignore if fit addon fails */
+        }
       }
-    } catch {
-      /* ignore if addon fails */
-    }
+    })()
 
     // measurement helper (placed before it's used)
     const measureChar = (): { cols: number; rows: number } | null => {
@@ -126,16 +190,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
     // initial resize / fit after open — ensures term internal layout is ready
     requestAnimationFrame(() => {
-      try {
-        fit.fit()
-      } catch {
-        const dims = measureChar()
-        if (dims) {
-          try {
-            term.resize(dims.cols, dims.rows)
-          } catch {
-            /* ignore */
-          }
+      if (fit) {
+        try {
+          fit.fit()
+          return
+        } catch {
+          // fall through to manual sizing
+        }
+      }
+      const dims = measureChar()
+      if (dims) {
+        try {
+          term.resize(dims.cols, dims.rows)
+        } catch {
+          /* ignore */
         }
       }
     })
@@ -163,17 +231,21 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
 
     const ensureFitAndResize = (): void => {
-      try {
-        fit.fit()
-        return
-      } catch {
-        const dims = measureChar()
-        if (!dims) return
+      // if we have fit addon, use it; otherwise WebGL will handle resizing internally
+      if (fit) {
         try {
-          term.resize(dims.cols, dims.rows)
+          fit.fit()
+          return
         } catch {
-          /* ignore resize errors */
+          /* fallback to manual */
         }
+      }
+      const dims = measureChar()
+      if (!dims) return
+      try {
+        term.resize(dims.cols, dims.rows)
+      } catch {
+        /* ignore resize errors */
       }
     }
 
@@ -258,17 +330,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     })
 
     const ro = new ResizeObserver(() => {
-      try {
-        fit.fit()
-        return
-      } catch {
-        const dims = measureChar()
-        if (!dims) return
+      if (fit) {
         try {
-          term.resize(dims.cols, dims.rows)
+          fit.fit()
+          return
         } catch {
-          /* ignore resize errors */
+          // fall through to manual sizing below
         }
+      }
+      const dims = measureChar()
+      if (!dims) return
+      try {
+        term.resize(dims.cols, dims.rows)
+      } catch {
+        /* ignore resize errors */
       }
     })
 
@@ -278,6 +353,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       cleanup()
       ro.disconnect()
       mo.disconnect()
+      try {
+        webgl?.dispose()
+      } catch {
+        /* ignore */
+      }
       term.dispose()
       termRef.current = null
     }

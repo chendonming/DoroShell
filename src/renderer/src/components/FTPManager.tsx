@@ -61,17 +61,17 @@ const FTPManager: React.FC = () => {
   }, [isConnected])
   useEffect(() => {
     // 检查并设置初始主题
-  const savedTheme = localStorage.getItem('theme')
-  const savedPrimary = localStorage.getItem('fontPrimary') || ''
-  const savedFallback = localStorage.getItem('fontFallback') || ''
+    const savedTheme = localStorage.getItem('theme')
+    const savedPrimary = localStorage.getItem('fontPrimary') || ''
+    const savedFallback = localStorage.getItem('fontFallback') || ''
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     const shouldBeDark = savedTheme === 'dark' || (!savedTheme && prefersDark)
 
     setIsDarkMode(shouldBeDark)
     updateTheme(shouldBeDark)
-  if (savedPrimary || savedFallback) applyFonts(savedPrimary, savedFallback)
-  setFontPrimary(savedPrimary)
-  setFontFallback(savedFallback)
+    if (savedPrimary || savedFallback) applyFonts(savedPrimary, savedFallback)
+    setFontPrimary(savedPrimary)
+    setFontFallback(savedFallback)
 
     // 检查连接状态
     checkConnectionStatus()
@@ -102,8 +102,8 @@ const FTPManager: React.FC = () => {
       family += (family ? ', ' : '') + fallback
     }
     if (!family) {
-  // reset to default by removing inline CSS variable so the CSS :root value takes effect
-  root.style.removeProperty('--app-font-family')
+      // reset to default by removing inline CSS variable so the CSS :root value takes effect
+      root.style.removeProperty('--app-font-family')
       localStorage.removeItem('fontPrimary')
       localStorage.removeItem('fontFallback')
       return
@@ -390,9 +390,9 @@ const FTPManager: React.FC = () => {
         connectionStatus={connectionStatus}
         currentServer={currentServer}
         transfersCount={transfers.length}
-  isDarkMode={isDarkMode}
-  onToggleDarkMode={toggleDarkMode}
-  onOpenSettings={() => setShowSettings(true)}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={toggleDarkMode}
+        onOpenSettings={() => setShowSettings(true)}
         onOpenConnectionManager={() => setShowConnectionManager(true)}
         onShowTransfers={() => setShowTransferModal(true)}
         onToggleTerminal={() => setTerminalOpen((v) => !v)}

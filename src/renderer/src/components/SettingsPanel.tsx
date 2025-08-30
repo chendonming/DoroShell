@@ -226,7 +226,12 @@ const SettingsPanel: React.FC<Props> = ({
 
           <div className="mt-4 text-gray-700 dark:text-gray-200">
             关于
-            <a href="https://nikke-goddess-of-victory-international.fandom.com/wiki/Dorothy" target="_blank" rel="noreferrer" className="text-blue-600 underline ml-1">
+            <a
+              href="https://nikke-goddess-of-victory-international.fandom.com/wiki/Dorothy"
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-600 underline ml-1"
+            >
               Doro
             </a>
           </div>

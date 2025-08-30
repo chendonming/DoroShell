@@ -107,13 +107,12 @@ const api: ElectronAPI = {
     // 在系统文件管理器中显示指定路径
     showItemInFolder: (path: string): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('path:show-item-in-folder', path)
-  }
-
-  ,
+  },
 
   // System related helper APIs
   system: {
-    getFonts: (): Promise<{ success: boolean; fonts: string[] }> => ipcRenderer.invoke('system:get-fonts')
+    getFonts: (): Promise<{ success: boolean; fonts: string[] }> =>
+      ipcRenderer.invoke('system:get-fonts')
   }
 }
 
