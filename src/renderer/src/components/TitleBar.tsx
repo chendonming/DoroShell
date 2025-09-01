@@ -20,8 +20,6 @@ const TitleBar: React.FC<Props> = ({
   connectionStatus,
   currentServer,
   transfersCount,
-  isDarkMode,
-  onToggleDarkMode,
   onOpenConnectionManager,
   onShowTransfers,
   onToggleTerminal,
