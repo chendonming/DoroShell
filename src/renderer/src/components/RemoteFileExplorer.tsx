@@ -690,7 +690,34 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
               return
             }
 
-            const ok = await confirm({ message: `确定要删除 "${targets.join('、')}" 吗？` })
+            // 构建详细统计信息
+            let countFiles = 0
+            let countDirs = 0
+            let totalSize = 0
+            const sampleNames: string[] = []
+            for (const name of targets) {
+              const f = files.find((x) => x.name === name)
+              if (f) {
+                if (f.type === 'directory') countDirs++
+                else {
+                  countFiles++
+                  totalSize += f.size || 0
+                }
+                if (sampleNames.length < 5) sampleNames.push(f.name)
+              }
+            }
+
+            const parts: string[] = []
+            parts.push(`共 ${targets.length} 项`)
+            if (countFiles > 0) parts.push(`${countFiles} 个文件`)
+            if (countDirs > 0) parts.push(`${countDirs} 个文件夹`)
+            if (totalSize > 0) parts.push(`总大小 ${formatFileSize(totalSize)}`)
+            const summary = parts.join('，')
+            const examples = sampleNames.length > 0 ? `示例：${sampleNames.join('、')}` : ''
+
+            const ok = await confirm({
+              message: `${summary}\n${examples}\n确定要删除这些项吗？`
+            })
             if (!ok) return
 
             for (const t of targets) {
