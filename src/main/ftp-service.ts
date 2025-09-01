@@ -253,12 +253,131 @@ export class FTPService extends EventEmitter {
           } as TransferProgress)
         })
 
-        await this.client.uploadFrom(localPath, remotePath)
+        // 为了避免部分覆盖导致显示成功但目标文件未替换，先上传到临时文件再重命名为目标文件
+        const parentDir = path.posix.dirname(remotePath) || '/'
+        const baseName = path.posix.basename(remotePath)
+        const tmpRemote = path.posix.join(
+          parentDir === '.' ? '/' : parentDir,
+          `${baseName}.tmp-${transferId}`
+        )
+
+        await this.client.uploadFrom(localPath, tmpRemote)
 
         // 清除进度追踪
         this.client.trackProgress()
 
-        console.log('[FTPService] uploadFile success ->', { transferId, localPath, remotePath })
+        // 尝试将临时文件重命名为目标文件（覆盖）
+        try {
+          await this.client.rename(tmpRemote, remotePath)
+        } catch (renameErr) {
+          console.error(
+            '[FTPService] failed to rename tmp remote -> transferId=%s tmpRemote=%s remotePath=%s error=%o',
+            transferId,
+            tmpRemote,
+            remotePath,
+            renameErr
+          )
+          // 尝试清理临时文件（忽略错误）
+          try {
+            await this.client.remove(tmpRemote)
+          } catch {
+            // ignore
+          }
+          const msg = `Upload completed but rename to ${remotePath} failed: ${renameErr instanceof Error ? renameErr.message : String(renameErr)}`
+          this.emit('transferProgress', {
+            transferId,
+            progress: 0,
+            status: 'failed',
+            error: msg
+          } as TransferProgress)
+
+          return {
+            success: false,
+            transferId,
+            error: msg
+          }
+        }
+
+        // 尝试校验远程文件是否存在并匹配大小（如果服务器支持）
+        let verified = false
+        try {
+          // 优先使用 size 命令
+          // basic-ftp 的 Client 实例支持 size(remotePath)
+          // 如果服务器不支持 size，会抛出异常，我们将退回到列目录查找
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          const remoteSize = await this.client.size(remotePath)
+          console.log(
+            '[FTPService] upload verify size -> transferId=%s remoteSize=%s expected=%s',
+            transferId,
+            remoteSize,
+            stats.size
+          )
+          if (typeof remoteSize === 'number' && remoteSize >= 0) {
+            verified = remoteSize === stats.size
+          }
+        } catch {
+          try {
+            // fallback: 列出父目录并查找文件项
+            const parentDir = path.posix.dirname(remotePath) || '/'
+            const baseName = path.posix.basename(remotePath)
+            const list = await this.client.list(parentDir === '.' ? '/' : parentDir)
+            const found = list.find((item) => item.name === baseName)
+            if (found) {
+              // some servers provide size in the list item
+              const foundSize =
+                typeof found.size === 'number' ? found.size : Number(found.size) || 0
+              console.log(
+                '[FTPService] upload verify list -> transferId=%s parentDir=%s baseName=%s foundSize=%s',
+                transferId,
+                parentDir,
+                baseName,
+                foundSize
+              )
+              verified = foundSize === stats.size
+            } else {
+              console.warn(
+                '[FTPService] upload verify list: not found -> transferId=%s parentDir=%s baseName=%s',
+                transferId,
+                parentDir,
+                baseName
+              )
+            }
+          } catch (listErr) {
+            console.warn(
+              '[FTPService] upload verify failed to determine remote file -> transferId=%s remotePath=%s error=%o',
+              transferId,
+              remotePath,
+              listErr
+            )
+          }
+        }
+
+        console.log(
+          '[FTPService] uploadFile success -> transferId=%s localPath=%s remotePath=%s verified=%s',
+          transferId,
+          localPath,
+          remotePath,
+          verified
+        )
+
+        if (!verified) {
+          // 如果无法校验或校验失败，返回失败状态以告知上层真实情况
+          const msg = `Upload reported success but verification failed for ${remotePath}`
+          console.error('[FTPService] upload verification failed ->', { transferId, remotePath })
+          this.emit('transferProgress', {
+            transferId,
+            progress: 0,
+            status: 'failed',
+            error: msg
+          } as TransferProgress)
+
+          return {
+            success: false,
+            transferId,
+            error: msg
+          }
+        }
 
         // 发送完成状态
         this.emit('transferProgress', {

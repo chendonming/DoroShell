@@ -294,6 +294,8 @@ export class SFTPService extends EventEmitter {
         }
       }
 
+      const localStats = fs.statSync(localPath)
+
       try {
         // 创建上传进度回调
         const progressCallback = (total: number, uploaded: number): void => {
@@ -314,6 +316,56 @@ export class SFTPService extends EventEmitter {
 
         // 发送完成进度
         console.log('[SFTPService] uploadFile success ->', { transferId, localPath, remotePath })
+
+        // 上传后尝试校验远程文件大小
+        let verified = false
+        try {
+          // ssh2-sftp-client 提供 stat 方法
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          const remoteStat = await this.client.stat(remotePath)
+          const remoteSize = (remoteStat && (remoteStat.size ?? remoteStat.attrs?.size)) || 0
+          console.log(
+            '[SFTPService] upload verify stat -> transferId=%s remoteSize=%s expected=%s',
+            transferId,
+            remoteSize,
+            localStats.size
+          )
+          if (typeof remoteSize === 'number') {
+            verified = remoteSize === localStats.size
+          }
+        } catch (verifyErr) {
+          console.warn(
+            '[SFTPService] upload verify stat failed -> transferId=%s remotePath=%s error=%o',
+            transferId,
+            remotePath,
+            verifyErr
+          )
+        }
+
+        console.log(
+          '[SFTPService] uploadFile completed -> transferId=%s localPath=%s remotePath=%s verified=%s',
+          transferId,
+          localPath,
+          remotePath,
+          verified
+        )
+
+        if (!verified) {
+          const msg = `Upload reported success but verification failed for ${remotePath}`
+          this.emit('transferProgress', {
+            transferId,
+            progress: 0,
+            status: 'failed' as const,
+            error: msg
+          } as TransferProgress)
+
+          return {
+            success: false,
+            transferId,
+            error: msg
+          }
+        }
 
         this.emit('transferProgress', {
           transferId,

@@ -91,8 +91,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       theme: document.documentElement.classList.contains('dark') ? xtermDarkTheme : xtermLightTheme
     })
     // 提前声明 fit/webgl 引用，避免在使用前重复声明
+    type FitAddonLike = { fit?: () => void }
+    type WebglLike = { activate?: (t: Terminal) => void; dispose?: () => void }
+
     let fit: FitAddon | null = null
-    let webgl: any | null = null
+    let webgl: WebglLike | null = null
 
     term.open(containerRef.current)
     // 立即创建并加载 FitAddon，确保初始渲染阶段能精确计算 cols/rows
@@ -120,7 +123,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     termRef.current = term
 
     // 安全的fit调用函数，确保terminal已完全初始化
-    const safeFit = (fitAddon: any): boolean => {
+    const safeFit = (fitAddon: unknown): boolean => {
       try {
         // 基本检查：terminal和容器是否存在
         const container = containerRef.current
@@ -139,7 +142,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         }
 
         // 直接尝试fit，依赖try-catch捕获任何内部错误
-        fitAddon.fit()
+        if (fitAddon && typeof (fitAddon as FitAddonLike).fit === 'function') {
+          ;(fitAddon as FitAddonLike).fit!()
+        }
         return true
       } catch (error) {
         if (process.env.NODE_ENV === 'development') {
@@ -150,7 +155,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     }
 
     // 带重试的延迟fit函数
-    const delayedFitWithRetry = (fitAddon: any, maxRetries = 5, delay = 200): void => {
+    const delayedFitWithRetry = (fitAddon: unknown, maxRetries = 5, delay = 200): void => {
       let retryCount = 0
       const tryFit = (): void => {
         if (safeFit(fitAddon)) {
@@ -236,7 +241,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         const Webgl = mod?.default ?? mod?.WebglAddon ?? mod
         webgl = new Webgl({ preserveDrawingBuffer: false })
         // activate will throw if WebGL context can't be created
-        webgl.activate(term)
+        if (webgl && typeof webgl.activate === 'function') {
+          webgl.activate(term)
+        }
 
         // 激活后让 FitAddon 先计算 cols/rows（若已加载），再更新 canvas backing buffer
         if (fit) {
@@ -463,7 +470,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       ro.disconnect()
       mo.disconnect()
       try {
-        webgl?.dispose()
+        if (webgl && typeof webgl.dispose === 'function') {
+          webgl.dispose()
+        }
       } catch {
         /* ignore */
       }

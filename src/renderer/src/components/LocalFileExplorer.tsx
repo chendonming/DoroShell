@@ -63,6 +63,19 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
   const [newlyCreatedItem, setNewlyCreatedItem] = useState<string | null>(null)
   const [highlightedItem, setHighlightedItem] = useState<string | null>(null)
   const confirm = useConfirm()
+  // batch-level overwrite decision: 'yesToAll' | 'noToAll' | null
+  const batchOverwriteRef = React.useRef<'yesToAll' | 'noToAll' | null>(null)
+  const [overwriteDialog, setOverwriteDialog] = useState<{
+    visible: boolean
+    fileName: string
+    resolver?: (val: 'yes' | 'no' | 'yesToAll' | 'noToAll') => void
+  }>({ visible: false, fileName: '' })
+
+  const askOverwrite = (fileName: string): Promise<'yes' | 'no' | 'yesToAll' | 'noToAll'> => {
+    return new Promise((resolve) => {
+      setOverwriteDialog({ visible: true, fileName, resolver: resolve })
+    })
+  }
 
   const updateCurrentPath = useCallback(
     (newPath: string): void => {
@@ -351,22 +364,68 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
       return
     }
 
-    console.log('[Renderer] LocalFileExplorer handleUpload called ->', {
-      currentPath,
-      selected
-    })
+    console.log('[Renderer] LocalFileExplorer handleUpload called ->', { currentPath, selected })
 
-    const uploads: Array<{ localPath: string; remotePath: string; name: string; size: number }> = []
+    // 获取当前远端路径，作为上传目标的基准
+    let remoteCurrentPath = '/'
+    try {
+      const p = await window.api.ftp.getCurrentPath()
+      if (p && typeof p === 'string') remoteCurrentPath = p
+    } catch (err) {
+      console.warn('Failed to get remote current path, default to /', err)
+    }
+
+    const joinRemote = (base: string, sub: string): string => {
+      if (!base || base === '/') return `/${sub}`
+      return `${base}/${sub}`
+    }
+
+    const uploads: Array<{
+      localPath: string
+      remotePath: string
+      name: string
+      size: number
+    }> = []
     const seen = new Set<string>()
 
-    const normalize = (p: string) => p.replace(/\\/g, '/')
+    const normalize = (p: string): string => p.replace(/\\/g, '/')
 
     for (const item of selected) {
       if (item.type === 'file') {
         if (!seen.has(item.path)) {
+          const targetRemote = joinRemote(remoteCurrentPath, item.name)
+
+          // 检查远端是否已存在同名文件
+          try {
+            const listRes = await window.api.ftp.listDirectory(remoteCurrentPath)
+            if (listRes.success && Array.isArray(listRes.files)) {
+              const exists = listRes.files.some((f) => f.name === item.name)
+              if (exists) {
+                // 先检查批次级决策
+                if (batchOverwriteRef.current === 'noToAll') {
+                  seen.add(item.path)
+                  continue
+                }
+                if (batchOverwriteRef.current === 'yesToAll') {
+                  // proceed
+                } else {
+                  const decision = await askOverwrite(item.name)
+                  if (decision === 'no') {
+                    seen.add(item.path)
+                    continue
+                  }
+                  if (decision === 'yesToAll') batchOverwriteRef.current = 'yesToAll'
+                  if (decision === 'noToAll') batchOverwriteRef.current = 'noToAll'
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('Failed to check remote existence for', item.name, err)
+          }
+
           uploads.push({
             localPath: item.path,
-            remotePath: `/${item.name}`,
+            remotePath: targetRemote,
             name: item.name,
             size: item.size
           })
@@ -382,7 +441,6 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
         while (stack.length > 0) {
           // 弹出一个目录并读取其条目
           // 注意：这里按顺序读取，避免一次性递归造成大量并发
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           const dir = stack.pop()!
           try {
             const res = await window.api.fs.readDirectory(dir)
@@ -395,10 +453,44 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                     const rel = normalize(childPath).startsWith(normalize(rootPath) + '/')
                       ? normalize(childPath).slice(normalize(rootPath).length + 1)
                       : child.name
-                    const remotePath = `/${rootName}/${rel}`
+                    const remoteRel = `${rootName}/${rel}`
+                    const targetRemote = joinRemote(remoteCurrentPath, remoteRel)
+
+                    // 检查是否存在同名远端文件（针对文件项）
+                    if (child.type === 'file') {
+                      try {
+                        // 计算父目录（避免在渲染器中使用 Node path）
+                        const idx = targetRemote.lastIndexOf('/')
+                        const parentDir = idx > 0 ? targetRemote.slice(0, idx) : '/'
+                        const listRes = await window.api.ftp.listDirectory(parentDir)
+                        if (listRes.success && Array.isArray(listRes.files)) {
+                          const exists = listRes.files.some((f) => f.name === child.name)
+                          if (exists) {
+                            // 批次决策检查
+                            if (batchOverwriteRef.current === 'noToAll') {
+                              seen.add(childPath)
+                              continue
+                            }
+                            if (batchOverwriteRef.current === 'yesToAll') {
+                              // proceed
+                            } else {
+                              const decision = await askOverwrite(child.name)
+                              if (decision === 'no') {
+                                seen.add(childPath)
+                                continue
+                              }
+                              if (decision === 'yesToAll') batchOverwriteRef.current = 'yesToAll'
+                              if (decision === 'noToAll') batchOverwriteRef.current = 'noToAll'
+                            }
+                          }
+                        }
+                      } catch (err) {
+                        console.warn('Failed to check remote existence for', child.name, err)
+                      }
+                    }
                     uploads.push({
                       localPath: childPath,
-                      remotePath,
+                      remotePath: targetRemote,
                       name: child.name,
                       size: child.size
                     })
@@ -728,6 +820,59 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
         onConfirm={handlePromptConfirm}
         onCancel={handlePromptCancel}
       />
+
+      {/* Overwrite confirmation dialog for batch uploads */}
+      {overwriteDialog.visible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 z-10 w-full max-w-md shadow-lg">
+            <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
+              确认覆盖
+            </h3>
+            <p className="text-sm text-gray-700 dark:text-gray-200 mb-4">
+              远端已存在 {overwriteDialog.fileName}，是否覆盖？
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setOverwriteDialog({ visible: false, fileName: '' })
+                  overwriteDialog.resolver?.('no')
+                }}
+                className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                否
+              </button>
+              <button
+                onClick={() => {
+                  setOverwriteDialog({ visible: false, fileName: '' })
+                  overwriteDialog.resolver?.('yes')
+                }}
+                className="px-3 py-1 rounded bg-blue-600 text-white"
+              >
+                是
+              </button>
+              <button
+                onClick={() => {
+                  setOverwriteDialog({ visible: false, fileName: '' })
+                  overwriteDialog.resolver?.('yesToAll')
+                }}
+                className="px-3 py-1 rounded bg-green-600 text-white"
+              >
+                全部为是
+              </button>
+              <button
+                onClick={() => {
+                  setOverwriteDialog({ visible: false, fileName: '' })
+                  overwriteDialog.resolver?.('noToAll')
+                }}
+                className="px-3 py-1 rounded bg-red-600 text-white"
+              >
+                全部为否
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

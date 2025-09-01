@@ -133,7 +133,7 @@ const windowControls = {
 }
 
 // attach to api for convenience
-// @ts-ignore
+// @ts-ignore - window.api may not be defined in non-browser test environments; this is safe when exposed via contextBridge
 api.windowControls = windowControls
 
 // SSH 相关的桥接 API（可选，如果主进程未实现，则返回失败）

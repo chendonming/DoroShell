@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 
+type SystemAPI = {
+  getFonts?: () => Promise<{ success: boolean; fonts: string[] }>
+}
+
 // FontPicker component defined at module scope to avoid remounts that cause input blur
 const FontPicker: React.FC<{
   id: string
@@ -18,7 +22,7 @@ const FontPicker: React.FC<{
     : options
 
   useEffect(() => {
-    const onDocDown = (e: MouseEvent) => {
+    const onDocDown = (e: MouseEvent): void => {
       if (!containerRef.current) return
       if (!containerRef.current.contains(e.target as Node)) {
         setOpen(false)
@@ -30,7 +34,7 @@ const FontPicker: React.FC<{
   }, [])
 
   const selectAt = useCallback(
-    (idx: number) => {
+    (idx: number): void => {
       if (idx >= 0 && idx < filtered.length) {
         onChange(filtered[idx])
       }
@@ -40,7 +44,7 @@ const FontPicker: React.FC<{
     [filtered, onChange]
   )
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setOpen(true)
@@ -133,8 +137,10 @@ const SettingsPanel: React.FC<Props> = ({
     // 获取系统字体列表（如果可用）
     ;(async () => {
       try {
-        if (window.api && (window.api as any).system && (window.api as any).system.getFonts) {
-          const res = await (window.api as any).system.getFonts()
+        // narrow type for window.api.system
+        const sys = (window as unknown as { api?: { system?: SystemAPI } }).api?.system
+        if (sys && typeof sys.getFonts === 'function') {
+          const res = await sys.getFonts()
           if (res && res.success && Array.isArray(res.fonts)) setAvailableFonts(res.fonts)
         }
       } catch {
