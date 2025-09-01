@@ -676,12 +676,12 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
         label: '删除',
         action: async () => {
           try {
-            // 删除同 LocalFileExplorer 行为
+            // 优先使用 checkbox 选中的项进行批量删除
             let targets: string[] = []
-            if (ctxTargetRef.current) {
-              targets = [ctxTargetRef.current.name]
-            } else if (selectedFiles.size > 0) {
+            if (selectedFiles.size > 0) {
               targets = Array.from(selectedFiles)
+            } else if (ctxTargetRef.current) {
+              targets = [ctxTargetRef.current.name]
             }
 
             if (targets.length === 0) {
