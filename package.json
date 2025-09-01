@@ -1,6 +1,6 @@
 {
   "name": "doroshell",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "support sftp、ftp、SSH",
   "main": "./out/main/index.js",
   "author": "chendm",
