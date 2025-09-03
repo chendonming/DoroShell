@@ -373,6 +373,9 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
   }
 
   const handleUpload = async (): Promise<void> => {
+    // 重置批次级决策，确保每次上传都重新询问用户
+    batchOverwriteRef.current = null
+
     // 支持文件和文件夹同时勾选：文件直接上传，文件夹递归读取并上传其中的文件，保留目录结构
     const selected = files.filter((f) => selectedFiles.has(f.path))
 
@@ -432,7 +435,11 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                     continue
                   }
                   if (decision === 'yesToAll') batchOverwriteRef.current = 'yesToAll'
-                  if (decision === 'noToAll') batchOverwriteRef.current = 'noToAll'
+                  if (decision === 'noToAll') {
+                    batchOverwriteRef.current = 'noToAll'
+                    seen.add(item.path)
+                    continue
+                  }
                 }
               }
             }
@@ -497,7 +504,11 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                                 continue
                               }
                               if (decision === 'yesToAll') batchOverwriteRef.current = 'yesToAll'
-                              if (decision === 'noToAll') batchOverwriteRef.current = 'noToAll'
+                              if (decision === 'noToAll') {
+                                batchOverwriteRef.current = 'noToAll'
+                                seen.add(childPath)
+                                continue
+                              }
                             }
                           }
                         }
