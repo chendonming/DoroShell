@@ -446,10 +446,6 @@ const DoroShell: React.FC = () => {
     )
   }
 
-  const getActiveSession = (): TerminalSession | null => {
-    return terminalSessions.find((s) => s.id === activeTerminalId) || null
-  }
-
   // 打开SSH终端的函数（增加重复检查）
   const handleOpenSSHTerminal = (): void => {
     if (!isConnected) {

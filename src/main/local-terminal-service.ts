@@ -51,7 +51,7 @@ export class LocalTerminalService extends EventEmitter {
       })
 
       // 监听进程退出
-      pty.onExit(({ exitCode, signal }) => {
+      pty.onExit(({ exitCode }) => {
         try {
           this.terminals.delete(terminalId)
           // 确保 exitCode 是数字，如果是 undefined 则设为 -1
