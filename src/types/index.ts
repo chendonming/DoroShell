@@ -141,6 +141,16 @@ export interface FTPAPI {
   deleteFile: (remotePath: string) => Promise<{ success: boolean; error?: string }>
   deleteDirectory: (remotePath: string) => Promise<{ success: boolean; error?: string }>
   renameFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>
+  // 远程文件编辑功能
+  startEditingWithEditor: (remotePath: string, editorType: EditorType) => Promise<EditingResult>
+  stopEditing: (sessionId: string) => Promise<{ success: boolean; error?: string }>
+  getEditingSessions: () => Promise<RemoteFileEditingSession[]>
+  forceSync: (sessionId: string) => Promise<{ success: boolean; error?: string }>
+  resolveConflict: (
+    sessionId: string,
+    strategy: ConflictStrategy
+  ) => Promise<{ success: boolean; error?: string }>
+  onEditingStatusChange: (callback: (session: RemoteFileEditingSession) => void) => () => void
 }
 
 // 统一的连接状态表示
@@ -239,9 +249,66 @@ export interface SystemAPI {
   getFonts: () => Promise<{ success: boolean; fonts: string[] }>
 }
 
+// 远程文件编辑相关类型定义
+export type EditingStatus =
+  | 'DOWNLOADING'
+  | 'READY'
+  | 'EDITING'
+  | 'SYNCING'
+  | 'CONFLICT'
+  | 'ERROR'
+  | 'COMPLETED'
+
+export type ConflictStrategy = 'overwrite' | 'merge' | 'cancel'
+
+export type EditorType = 'notepad' | 'vscode'
+
+export interface RemoteFileEditingSession {
+  id: string
+  remotePath: string
+  tempFilePath: string
+  status: EditingStatus
+  lastModified: Date
+  isModified: boolean
+  conflictResolution?: ConflictStrategy
+  startTime: Date
+  lastSyncTime?: Date
+  error?: string
+}
+
+export interface EditingResult {
+  success: boolean
+  sessionId?: string
+  error?: string
+}
+
+export interface RemoteFileEditingAPI {
+  // 开始编辑远程文件（指定编辑器）
+  startEditingWithEditor: (remotePath: string, editorType: EditorType) => Promise<EditingResult>
+
+  // 停止编辑会话
+  stopEditing: (sessionId: string) => Promise<{ success: boolean; error?: string }>
+
+  // 获取所有编辑会话
+  getEditingSessions: () => Promise<RemoteFileEditingSession[]>
+
+  // 强制同步文件
+  forceSync: (sessionId: string) => Promise<{ success: boolean; error?: string }>
+
+  // 解决冲突
+  resolveConflict: (
+    sessionId: string,
+    strategy: ConflictStrategy
+  ) => Promise<{ success: boolean; error?: string }>
+
+  // 监听编辑状态变化
+  onEditingStatusChange: (callback: (session: RemoteFileEditingSession) => void) => () => void
+}
+
 // extend ElectronAPI to include system api
 export interface ElectronAPI {
   system?: SystemAPI
+  remoteFileEditing?: RemoteFileEditingAPI
 }
 
 declare global {

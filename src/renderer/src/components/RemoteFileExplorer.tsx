@@ -2,18 +2,19 @@ import { useState, useEffect, useImperativeHandle, forwardRef, useCallback, useR
 import useConfirm from '../hooks/useConfirm'
 import type { PathInputHandle } from './PathInput'
 import { notify } from '../utils/notifications'
-import type { TransferItem } from '../../../types'
+import type { TransferItem, RemoteFileEditingSession } from '../../../types'
 import PathInput from './PathInput'
 import ContextMenu from './ContextMenu'
 import PromptDialog from './PromptDialog'
 // 本地上下文菜单项类型（与 ContextMenu.tsx 中定义的接口保持同步）
 type CtxItem = {
   label?: string
-  action?: () => void
+  action?: (event?: React.MouseEvent) => void
   disabled?: boolean
   disabledReason?: string
   separator?: boolean
   icon?: string
+  keepMenuOpen?: boolean
 }
 
 interface RemoteFileItem {
@@ -74,6 +75,9 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     const [ctxItems, setCtxItems] = useState<CtxItem[]>([])
     const ctxTargetRef = useRef<RemoteFileItem | null>(null)
     const confirm = useConfirm()
+
+    // 编辑会话状态管理
+    const [editingSessions, setEditingSessions] = useState<RemoteFileEditingSession[]>([])
 
     // 统一的排序函数：目录优先，然后按名称（不区分大小写）排序
     const sortRemoteFilesList = (list: RemoteFileItem[]): RemoteFileItem[] => {
@@ -169,6 +173,51 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
 
       loadFiles()
     }, [remotePath])
+
+    // 监听编辑状态变化
+    useEffect(() => {
+      const cleanup = window.api.ftp.onEditingStatusChange?.(
+        (session: RemoteFileEditingSession) => {
+          setEditingSessions((prev) => {
+            const index = prev.findIndex((s) => s.id === session.id)
+            if (index >= 0) {
+              const newSessions = [...prev]
+              newSessions[index] = session
+              return newSessions
+            } else {
+              return [...prev, session]
+            }
+          })
+
+          // 根据状态显示通知
+          if (session.status === 'EDITING') {
+            notify(`正在编辑: ${session.remotePath}`, 'info')
+          } else if (session.status === 'SYNCING') {
+            notify(`正在同步: ${session.remotePath}`, 'info')
+          } else if (session.status === 'CONFLICT') {
+            notify(`文件冲突: ${session.remotePath}`, 'error')
+          } else if (session.status === 'ERROR') {
+            notify(`编辑错误: ${session.error || '未知错误'}`, 'error')
+          } else if (session.status === 'COMPLETED') {
+            notify(`编辑完成: ${session.remotePath}`, 'success')
+            // 从列表中移除已完成的会话
+            setEditingSessions((prev) => prev.filter((s) => s.id !== session.id))
+          }
+        }
+      )
+
+      // 初始化时获取现有编辑会话
+      window.api.ftp
+        .getEditingSessions?.()
+        .then((sessions) => {
+          setEditingSessions(sessions)
+        })
+        .catch((error) => {
+          console.error('Failed to get editing sessions:', error)
+        })
+
+      return cleanup
+    }, [])
 
     const navigateToPath = async (newPath: string): Promise<void> => {
       try {
@@ -570,6 +619,78 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       closeContextMenu()
     }
 
+    // 显示编辑器选择菜单
+    const showEditorSelectionMenu = (event?: React.MouseEvent): void => {
+      const target = ctxTargetRef.current
+      if (!target || target.type !== 'file') {
+        notify('请选择一个文件进行编辑', 'info')
+        closeContextMenu()
+        return
+      }
+
+      // 创建编辑器选择菜单项
+      const editorMenuItems: CtxItem[] = [
+        {
+          label: '使用记事本打开',
+          action: async () => {
+            await handleEditWithEditor('notepad')
+          },
+          icon: '📄'
+        },
+        {
+          label: '使用 VS Code 打开',
+          action: async () => {
+            await handleEditWithEditor('vscode')
+          },
+          icon: '💻'
+        }
+      ]
+
+      // 使用当前鼠标位置（如果有）或者在原位置附近调整
+      let newX = ctxX
+      let newY = ctxY
+
+      if (event) {
+        // 使用当前点击事件的鼠标位置
+        newX = event.clientX
+        newY = event.clientY
+      } else {
+        // 如果没有事件，则稍微调整位置
+        newY = Math.max(10, ctxY - 20)
+      }
+
+      // 更新菜单位置和菜单项
+      setCtxX(newX)
+      setCtxY(newY)
+      setCtxItems(editorMenuItems)
+    }
+
+    // 处理使用指定编辑器编辑文件
+    const handleEditWithEditor = async (editorType: 'notepad' | 'vscode'): Promise<void> => {
+      try {
+        const target = ctxTargetRef.current
+        if (!target || target.type !== 'file') {
+          notify('请选择一个文件进行编辑', 'info')
+          return
+        }
+
+        const targetPath = remotePath === '/' ? `/${target.name}` : `${remotePath}/${target.name}`
+        const result = await window.api.ftp.startEditingWithEditor(targetPath, editorType)
+
+        if (result.success) {
+          const editorName = editorType === 'notepad' ? '记事本' : 'VS Code'
+          notify(`使用 ${editorName} 开始编辑 ${target.name}`, 'success')
+        } else {
+          notify(`编辑失败: ${result.error || '未知错误'}`, 'error')
+        }
+      } catch (error) {
+        console.error('编辑文件失败:', error)
+        notify('编辑文件失败', 'error')
+      } finally {
+        closeContextMenu()
+      }
+    }
+
     const getContextMenuItems = (status: {
       connected: boolean
       protocols: Array<'ftp' | 'sftp' | 'ssh'>
@@ -797,6 +918,58 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
         icon: '⬇️'
       })
 
+      // 编辑选项（仅对单个文件）
+      const target = ctxTargetRef.current
+      const filePath = target
+        ? remotePath === '/'
+          ? `/${target.name}`
+          : `${remotePath}/${target.name}`
+        : ''
+      const editingSession = editingSessions.find((session) => session.remotePath === filePath)
+
+      if (editingSession) {
+        // 如果文件正在编辑，显示结束编辑选项
+        items.push({
+          label: '结束编辑',
+          action: async () => {
+            try {
+              const result = await window.api.ftp.stopEditing(editingSession.id)
+              if (result.success) {
+                notify(`结束编辑 ${target?.name}`, 'success')
+              } else {
+                notify(`结束编辑失败: ${result.error || '未知错误'}`, 'error')
+              }
+            } catch (error) {
+              console.error('结束编辑失败:', error)
+              notify('结束编辑失败', 'error')
+            } finally {
+              closeContextMenu()
+            }
+          },
+          disabled: false,
+          icon: '✅'
+        })
+      } else {
+        // 如果文件未在编辑，显示编辑选项，点击后弹出编辑器选择菜单
+        items.push({
+          label: '编辑',
+          disabled: !isConnected || !target || target.type !== 'file',
+          disabledReason: !isConnected
+            ? '未连接到 FTP/SFTP，无法编辑'
+            : !target
+              ? '请选择一个文件'
+              : target.type !== 'file'
+                ? '只能编辑文件，不能编辑文件夹'
+                : '',
+          icon: '✏️',
+          keepMenuOpen: true, // 保持菜单打开以显示编辑器选择
+          action: (event) => {
+            // 显示编辑器选择菜单，传递鼠标事件
+            showEditorSelectionMenu(event)
+          }
+        })
+      }
+
       // 添加分割线和终端选项
       items.push({ separator: true })
 
@@ -892,6 +1065,25 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     }
 
     const getFileIcon = (file: RemoteFileItem): string => {
+      // 检查是否正在编辑该文件
+      const filePath = remotePath === '/' ? `/${file.name}` : `${remotePath}/${file.name}`
+      const editingSession = editingSessions.find((session) => session.remotePath === filePath)
+
+      if (editingSession) {
+        switch (editingSession.status) {
+          case 'EDITING':
+            return '✏️' // 编辑中
+          case 'SYNCING':
+            return '🔄' // 同步中
+          case 'CONFLICT':
+            return '⚠️' // 冲突
+          case 'ERROR':
+            return '❌' // 错误
+          default:
+            break
+        }
+      }
+
       if (file.type === 'directory') return '📁'
 
       const ext = file.name.split('.').pop()?.toLowerCase()
@@ -1047,9 +1239,36 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
                           onClick={(e) => e.stopPropagation()}
                         />
                         <span className="text-lg">{getFileIcon(file)}</span>
-                        <span className="text-sm text-gray-900 dark:text-white font-medium">
-                          {file.name}
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm text-gray-900 dark:text-white font-medium">
+                            {file.name}
+                          </span>
+                          {(() => {
+                            const filePath =
+                              remotePath === '/' ? `/${file.name}` : `${remotePath}/${file.name}`
+                            const editingSession = editingSessions.find(
+                              (session) => session.remotePath === filePath
+                            )
+                            if (editingSession) {
+                              const statusText =
+                                {
+                                  DOWNLOADING: '下载中',
+                                  READY: '准备中',
+                                  EDITING: '编辑中',
+                                  SYNCING: '同步中',
+                                  CONFLICT: '冲突',
+                                  ERROR: '错误',
+                                  COMPLETED: '完成'
+                                }[editingSession.status] || editingSession.status
+                              return (
+                                <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full">
+                                  {statusText}
+                                </span>
+                              )
+                            }
+                            return null
+                          })()}
+                        </div>
                       </div>
                     </td>
                     <td className="p-3 border-b border-gray-100 dark:border-gray-700">

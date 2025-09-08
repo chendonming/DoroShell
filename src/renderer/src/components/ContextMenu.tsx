@@ -1,14 +1,16 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useMemo } from 'react'
 import { notify } from '../utils/notifications'
 
 interface ContextMenuItem {
   label?: string
-  action?: () => void
+  action?: (event?: React.MouseEvent) => void
   disabled?: boolean
   // 提供禁用时的原因提示文字（可选），将用于向用户说明为何该项被禁用
   disabledReason?: string
   separator?: boolean
   icon?: string
+  // 是否在点击后保持菜单打开状态（用于子菜单等场景）
+  keepMenuOpen?: boolean
 }
 
 interface ContextMenuProps {
@@ -22,8 +24,8 @@ interface ContextMenuProps {
 const ContextMenu: React.FC<ContextMenuProps> = ({ visible, x, y, items, onClose }) => {
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // 直接计算菜单位置，避免使用useState导致的闪烁
-  const calculatePosition = (): { x: number; y: number } => {
+  // 使用 useMemo 在 items 变化时重新计算菜单位置
+  const position = useMemo(() => {
     // 更精确地估算菜单尺寸
     let estimatedHeight = 16 // 基础padding (py-1 = 8px * 2)
 
@@ -55,9 +57,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ visible, x, y, items, onClose
     if (adjustedY < 0) adjustedY = 0
 
     return { x: adjustedX, y: adjustedY }
-  }
-
-  const position = calculatePosition()
+  }, [x, y, items]) // 依赖 x, y 和 items，任何一个变化都会重新计算位置
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent): void => {
@@ -105,7 +105,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ visible, x, y, items, onClose
                   ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
                   : 'text-gray-700 dark:text-gray-200 cursor-pointer'
               }`}
-              onClick={() => {
+              onClick={(event) => {
                 if (item.disabled) {
                   // 如果提供禁用原因，通知用户
                   try {
@@ -124,8 +124,11 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ visible, x, y, items, onClose
                 }
 
                 if (!item.disabled && item.action) {
-                  item.action()
-                  onClose()
+                  item.action(event)
+                  // 只有在不需要保持菜单打开时才关闭菜单
+                  if (!item.keepMenuOpen) {
+                    onClose()
+                  }
                 }
               }}
               disabled={item.disabled}

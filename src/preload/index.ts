@@ -60,6 +60,34 @@ const api: ElectronAPI = {
     renameFile: (oldPath: string, newPath: string) =>
       ipcRenderer.invoke('ftp:rename-file', oldPath, newPath),
 
+    // 远程文件编辑功能
+    startEditingWithEditor: (remotePath: string, editorType: 'notepad' | 'vscode') =>
+      ipcRenderer.invoke('remote-file:start-editing-with-editor', remotePath, editorType),
+
+    stopEditing: (sessionId: string) => ipcRenderer.invoke('remote-file:stop-editing', sessionId),
+
+    getEditingSessions: () => ipcRenderer.invoke('remote-file:get-sessions'),
+
+    forceSync: (sessionId: string) => ipcRenderer.invoke('remote-file:force-sync', sessionId),
+
+    resolveConflict: (sessionId: string, strategy: import('../types').ConflictStrategy) =>
+      ipcRenderer.invoke('remote-file:resolve-conflict', sessionId, strategy),
+
+    onEditingStatusChange: (
+      callback: (session: import('../types').RemoteFileEditingSession) => void
+    ) => {
+      const handleStatusChange = (
+        _event: Electron.IpcRendererEvent,
+        session: import('../types').RemoteFileEditingSession
+      ): void => callback(session)
+      ipcRenderer.on('remote-file:status-change', handleStatusChange)
+
+      // 返回清理函数
+      return (): void => {
+        ipcRenderer.removeListener('remote-file:status-change', handleStatusChange)
+      }
+    },
+
     onTransferProgress: (callback: (progress: TransferProgress) => void) => {
       const handleProgress = (
         _event: Electron.IpcRendererEvent,

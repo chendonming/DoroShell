@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { ConnectionManager } from './connection-manager'
 import { sshService } from './ssh-service'
 import { localTerminalService } from './local-terminal-service'
+import { RemoteFileEditingService } from './remote-file-editing-service'
 import { stat, readdir, writeFile, mkdir, unlink, rmdir, rename } from 'fs/promises'
 import { homedir } from 'os'
 import type {
@@ -14,12 +15,17 @@ import type {
   TransferResult,
   LocalFileItem,
   LocalDirectoryResult,
-  LocalTerminalOptions
+  LocalTerminalOptions,
+  EditingResult,
+  RemoteFileEditingSession,
+  ConflictStrategy
 } from '../types'
 import type { SSHCredentials } from '../types'
 
 // 创建连接管理器实例
 const connectionManager = new ConnectionManager()
+// 创建远程文件编辑服务实例
+const remoteFileEditingService = new RemoteFileEditingService(connectionManager)
 // keep a reference to main window so IPC handlers can control it
 let mainWindowRef: BrowserWindow | null = null
 
@@ -130,6 +136,15 @@ function createWindow(): void {
   // 监听传输进度事件
   connectionManager.on('transferProgress', (progress) => {
     mainWindow?.webContents.send('transferProgress', progress)
+  })
+
+  // 监听远程文件编辑状态变化
+  remoteFileEditingService.on('statusChange', (session: RemoteFileEditingSession) => {
+    try {
+      mainWindow?.webContents.send('remote-file:status-change', session)
+    } catch (error) {
+      console.error('Failed to send editing status change:', error)
+    }
   })
 
   // SSH 服务数据转发
@@ -697,6 +712,76 @@ app.whenReady().then(() => {
     }
   })
 
+  // ===== 远程文件编辑 IPC 处理器 =====
+  ipcMain.handle(
+    'remote-file:start-editing-with-editor',
+    async (_, remotePath: string, editorType: 'notepad' | 'vscode'): Promise<EditingResult> => {
+      try {
+        return await remoteFileEditingService.startEditingWithEditor(remotePath, editorType)
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '启动编辑失败'
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'remote-file:stop-editing',
+    async (_, sessionId: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        return await remoteFileEditingService.stopEditing(sessionId)
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '停止编辑失败'
+        }
+      }
+    }
+  )
+
+  ipcMain.handle('remote-file:get-sessions', async (): Promise<RemoteFileEditingSession[]> => {
+    try {
+      return remoteFileEditingService.getEditingSessions()
+    } catch (error) {
+      console.error('Failed to get editing sessions:', error)
+      return []
+    }
+  })
+
+  ipcMain.handle(
+    'remote-file:force-sync',
+    async (_, sessionId: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        return await remoteFileEditingService.forceSync(sessionId)
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '强制同步失败'
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'remote-file:resolve-conflict',
+    async (
+      _,
+      sessionId: string,
+      strategy: ConflictStrategy
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        return await remoteFileEditingService.resolveConflict(sessionId, strategy)
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '解决冲突失败'
+        }
+      }
+    }
+  )
+
   // 本地终端IPC处理程序
   ipcMain.handle('local-terminal:create', async (_, options: LocalTerminalOptions) => {
     try {
@@ -766,6 +851,13 @@ app.on('window-all-closed', async () => {
     await localTerminalService.cleanup()
   } catch (error) {
     console.error('清理本地终端失败:', error)
+  }
+
+  // 清理远程文件编辑服务
+  try {
+    await remoteFileEditingService.cleanup()
+  } catch (error) {
+    console.error('清理远程文件编辑服务失败:', error)
   }
 
   if (process.platform !== 'darwin') {
