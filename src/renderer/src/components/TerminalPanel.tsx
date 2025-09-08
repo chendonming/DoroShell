@@ -22,14 +22,9 @@ interface TerminalPanelProps {
 
 const TerminalPanel: React.FC<TerminalPanelProps> = ({
   isOpen,
-  onClose,
-  isMaximized,
-  onToggleMaximize,
   isConnected,
-  currentServer,
   terminalType = 'ssh',
   localTerminalCwd,
-  sessionId,
   onSessionUpdate
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -44,8 +39,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
   // connection state is provided by parent
   const connected = terminalType === 'local' ? localTerminalActive : (isConnected ?? false)
-  const serverInfo =
-    terminalType === 'local' ? `本地终端 - ${localTerminalCwd || ''}` : (currentServer ?? '')
 
   // only notify when SSH connection transitions from connected -> disconnected
   const prevConnectedRef = useRef<boolean | null>(null)
@@ -550,7 +543,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   useEffect(() => {
     if (terminalType === 'local' && isOpen && localTerminalCwd && !localTerminalId) {
       // 创建本地终端
-      const initLocalTerminal = async () => {
+      const initLocalTerminal = async (): Promise<void> => {
         try {
           const result = await window.api.localTerminal?.createTerminal({
             cwd: localTerminalCwd,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import TerminalPanel from './TerminalPanel'
 import type { TerminalSession } from '../../../types'
 
@@ -26,22 +26,18 @@ const MultiTerminalPanel: React.FC<MultiTerminalPanelProps> = ({
   activeSessionId,
   onSwitchSession,
   onCloseSession,
-  onUpdateSession,
-  isConnected,
-  currentServer
+  onUpdateSession
 }) => {
-  const activeSession = sessions.find((s) => s.id === activeSessionId)
-
   if (!isOpen || sessions.length === 0) {
     return null
   }
 
-  const handleCloseSession = (sessionId: string, event: React.MouseEvent) => {
+  const handleCloseSession = (sessionId: string, event: React.MouseEvent): void => {
     event.stopPropagation()
     onCloseSession(sessionId)
   }
 
-  const handleClosePanel = () => {
+  const handleClosePanel = (): void => {
     onClose()
   }
 
