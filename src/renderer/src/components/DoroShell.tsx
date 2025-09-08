@@ -5,10 +5,15 @@ import RemoteFileExplorer, { type RemoteFileExplorerRef } from './RemoteFileExpl
 import FileTransfer from './FileTransfer'
 import Modal from './Modal'
 import SettingsPanel from './SettingsPanel'
-import TerminalPanel from './TerminalPanel'
+import MultiTerminalPanel from './MultiTerminalPanel'
 import CommandManager from './CommandManager'
 import TitleBar from './TitleBar'
-import type { FTPCredentials, TransferItem, TransferProgress } from '../../../types'
+import type {
+  FTPCredentials,
+  TransferItem,
+  TransferProgress,
+  TerminalSession
+} from '../../../types'
 
 const DoroShell: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false)
@@ -27,6 +32,9 @@ const DoroShell: React.FC = () => {
   const [showCommandManager, setShowCommandManager] = useState(false)
   const [terminalMaximized, setTerminalMaximized] = useState(false)
   const [terminalHeight, setTerminalHeight] = useState<number>(240)
+  // 多终端会话管理
+  const [terminalSessions, setTerminalSessions] = useState<TerminalSession[]>([])
+  const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null)
   const draggingRef = useRef(false)
   useEffect(() => {
     const onMouseMove = (e: MouseEvent): void => {
@@ -380,6 +388,107 @@ const DoroShell: React.FC = () => {
     setTransfers((prev) => prev.filter((t) => t.id !== id))
   }
 
+  // 终端会话管理函数
+  const createTerminalSession = (
+    type: 'ssh' | 'local',
+    options?: { cwd?: string }
+  ): TerminalSession => {
+    const id = `${type}-terminal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const now = Date.now()
+
+    if (type === 'ssh') {
+      return {
+        id,
+        type,
+        title: 'SSH 终端',
+        isActive: true,
+        serverInfo: currentServer,
+        isConnected: isConnected,
+        createdAt: now
+      }
+    } else {
+      return {
+        id,
+        type,
+        title: `本地终端 - ${options?.cwd || ''}`,
+        isActive: false, // 初始未激活，等待创建成功后激活
+        cwd: options?.cwd,
+        createdAt: now
+      }
+    }
+  }
+
+  const addTerminalSession = (session: TerminalSession): void => {
+    setTerminalSessions((prev) => [...prev, session])
+    setActiveTerminalId(session.id)
+    setTerminalOpen(true)
+  }
+
+  const removeTerminalSession = (sessionId: string): void => {
+    setTerminalSessions((prev) => {
+      const filtered = prev.filter((s) => s.id !== sessionId)
+      // 如果删除的是当前活跃终端，切换到其他终端或关闭
+      if (sessionId === activeTerminalId) {
+        if (filtered.length > 0) {
+          setActiveTerminalId(filtered[filtered.length - 1].id)
+        } else {
+          setActiveTerminalId(null)
+          setTerminalOpen(false)
+        }
+      }
+      return filtered
+    })
+  }
+
+  const updateTerminalSession = (sessionId: string, updates: Partial<TerminalSession>): void => {
+    setTerminalSessions((prev) =>
+      prev.map((session) => (session.id === sessionId ? { ...session, ...updates } : session))
+    )
+  }
+
+  const getActiveSession = (): TerminalSession | null => {
+    return terminalSessions.find((s) => s.id === activeTerminalId) || null
+  }
+
+  // 打开SSH终端的函数（增加重复检查）
+  const handleOpenSSHTerminal = (): void => {
+    if (!isConnected) {
+      console.warn('未连接SSH服务器，无法打开SSH终端')
+      return
+    }
+
+    // 检查是否已经存在SSH终端会话
+    const existingSSHSession = terminalSessions.find((s) => s.type === 'ssh' && s.isConnected)
+    if (existingSSHSession) {
+      // 如果已经有SSH终端，就切换到该终端
+      setActiveTerminalId(existingSSHSession.id)
+      setTerminalOpen(true)
+      console.log('切换到已有SSH终端，会话 ID:', existingSSHSession.id)
+      return
+    }
+
+    const session = createTerminalSession('ssh')
+    addTerminalSession(session)
+    console.log('创建新SSH终端，会话 ID:', session.id)
+  }
+
+  // 打开本地终端的函数（增加重复检查）
+  const handleOpenLocalTerminal = (cwd: string): void => {
+    // 检查是否已经存在相同工作目录的本地终端会话
+    const existingLocalSession = terminalSessions.find((s) => s.type === 'local' && s.cwd === cwd)
+    if (existingLocalSession) {
+      // 如果已经有相同目录的本地终端，就切换到该终端
+      setActiveTerminalId(existingLocalSession.id)
+      setTerminalOpen(true)
+      console.log('切换到已有本地终端，工作目录:', cwd, '会话 ID:', existingLocalSession.id)
+      return
+    }
+
+    const session = createTerminalSession('local', { cwd })
+    addTerminalSession(session)
+    console.log('创建新本地终端，工作目录:', cwd, '会话 ID:', session.id)
+  }
+
   // ...existing code...
 
   return (
@@ -395,7 +504,25 @@ const DoroShell: React.FC = () => {
         onOpenSettings={() => setShowSettings(true)}
         onOpenConnectionManager={() => setShowConnectionManager(true)}
         onShowTransfers={() => setShowTransferModal(true)}
-        onToggleTerminal={() => setTerminalOpen((v) => !v)}
+        onToggleTerminal={() => {
+          if (terminalOpen) {
+            // 如果终端已经打开，只需要关闭显示
+            setTerminalOpen(false)
+          } else {
+            // 打开终端面板，如果没有终端会话则智能创建
+            if (terminalSessions.length === 0) {
+              // 没有任何终端会话时，智能创建：优先SSH（如果已连接），否则本地终端
+              if (isConnected) {
+                handleOpenSSHTerminal()
+              } else {
+                handleOpenLocalTerminal(localCurrentPath || '')
+              }
+            } else {
+              // 如果已经有终端会话，只需要显示终端面板
+              setTerminalOpen(true)
+            }
+          }
+        }}
         onOpenCommandManager={() => setShowCommandManager(true)}
         onDisconnect={handleDisconnect}
       />
@@ -433,6 +560,7 @@ const DoroShell: React.FC = () => {
               <LocalFileExplorer
                 onAddTransfer={addTransfer}
                 onCurrentPathChange={setLocalCurrentPath}
+                onOpenLocalTerminal={handleOpenLocalTerminal}
               />
             </div>
 
@@ -445,6 +573,7 @@ const DoroShell: React.FC = () => {
                     <RemoteFileExplorer
                       ref={remoteFileExplorerRef}
                       onAddTransfer={addRemoteTransfer}
+                      onOpenSSHTerminal={handleOpenSSHTerminal}
                     />
                   </div>
 
@@ -490,16 +619,25 @@ const DoroShell: React.FC = () => {
         )}
 
         {/* 终端区 */}
-        {terminalOpen && (
+        {terminalOpen && terminalSessions.length > 0 && (
           <div
             style={{ height: terminalMaximized ? '100%' : `${terminalHeight}px` }}
             className="border-t border-gray-200 dark:border-gray-700 bg-gray-900"
           >
-            <TerminalPanel
+            <MultiTerminalPanel
               isOpen={terminalOpen}
-              onClose={() => setTerminalOpen(false)}
+              onClose={() => {
+                setTerminalOpen(false)
+                setTerminalSessions([])
+                setActiveTerminalId(null)
+              }}
               onToggleMaximize={() => setTerminalMaximized((v) => !v)}
               isMaximized={terminalMaximized}
+              sessions={terminalSessions}
+              activeSessionId={activeTerminalId}
+              onSwitchSession={setActiveTerminalId}
+              onCloseSession={removeTerminalSession}
+              onUpdateSession={updateTerminalSession}
               isConnected={isConnected}
               currentServer={currentServer}
             />

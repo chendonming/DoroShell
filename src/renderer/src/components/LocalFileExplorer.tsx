@@ -10,6 +10,7 @@ import type { PathInputHandle } from './PathInput'
 interface LocalFileExplorerProps {
   onAddTransfer: (transfer: TransferItem) => void
   onCurrentPathChange: (path: string) => void
+  onOpenLocalTerminal?: (cwd: string) => void
 }
 
 interface FileItem {
@@ -22,7 +23,8 @@ interface FileItem {
 
 const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
   onAddTransfer,
-  onCurrentPathChange
+  onCurrentPathChange,
+  onOpenLocalTerminal
 }) => {
   const [files, setFiles] = useState<FileItem[]>([])
   const [currentPath, setCurrentPath] = useState<string>('')
@@ -556,6 +558,13 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
     setSelectedFiles(new Set())
   }
 
+  // 打开本地终端的处理函数
+  const handleOpenTerminal = (): void => {
+    if (onOpenLocalTerminal) {
+      onOpenLocalTerminal(currentPath)
+    }
+  }
+
   const handlePromptConfirm = async (value: string): Promise<void> => {
     const { action } = promptDialog
 
@@ -673,6 +682,12 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
         action: handleUpload,
         disabled: !hasSelectedFiles,
         icon: '⬆️'
+      },
+      { separator: true },
+      {
+        label: '在此处打开终端',
+        action: handleOpenTerminal,
+        icon: '💻'
       }
     ]
   }

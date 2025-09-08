@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { ConnectionManager } from './connection-manager'
 import { sshService } from './ssh-service'
+import { localTerminalService } from './local-terminal-service'
 import { stat, readdir, writeFile, mkdir, unlink, rmdir, rename } from 'fs/promises'
 import { homedir } from 'os'
 import type {
@@ -12,7 +13,8 @@ import type {
   DirectoryListResult,
   TransferResult,
   LocalFileItem,
-  LocalDirectoryResult
+  LocalDirectoryResult,
+  LocalTerminalOptions
 } from '../types'
 import type { SSHCredentials } from '../types'
 
@@ -140,6 +142,27 @@ function createWindow(): void {
       /* ignore */
     }
     mainWindow?.webContents.send('ssh:data', data)
+  })
+
+  // 本地终端服务数据转发
+  localTerminalService.on('data', (terminalId: string, data: string) => {
+    try {
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[main] local-terminal:data preview ->', terminalId, data.slice(0, 100))
+      }
+      mainWindow?.webContents.send('local-terminal:data', terminalId, data)
+    } catch {
+      /* ignore */
+    }
+  })
+
+  localTerminalService.on('exit', (terminalId: string, exitCode: number) => {
+    try {
+      console.log('[main] local-terminal:exit ->', terminalId, exitCode)
+      mainWindow?.webContents.send('local-terminal:exit', terminalId, exitCode)
+    } catch {
+      /* ignore */
+    }
   })
 
   // 捕获 sshService 的错误，避免未处理的 'error' 事件导致进程异常退出
@@ -674,6 +697,57 @@ app.whenReady().then(() => {
     }
   })
 
+  // 本地终端IPC处理程序
+  ipcMain.handle('local-terminal:create', async (_, options: LocalTerminalOptions) => {
+    try {
+      return await localTerminalService.createTerminal(options)
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '创建本地终端失败'
+      }
+    }
+  })
+
+  ipcMain.handle('local-terminal:write', async (_, terminalId: string, data: string) => {
+    try {
+      await localTerminalService.writeToTerminal(terminalId, data)
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '写入终端失败'
+      }
+    }
+  })
+
+  ipcMain.handle(
+    'local-terminal:resize',
+    async (_, terminalId: string, cols: number, rows: number) => {
+      try {
+        await localTerminalService.resizeTerminal(terminalId, cols, rows)
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '调整终端大小失败'
+        }
+      }
+    }
+  )
+
+  ipcMain.handle('local-terminal:close', async (_, terminalId: string) => {
+    try {
+      await localTerminalService.closeTerminal(terminalId)
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '关闭终端失败'
+      }
+    }
+  })
+
   createWindow()
 
   app.on('activate', function () {
@@ -686,7 +760,14 @@ app.whenReady().then(() => {
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
+  // 清理所有本地终端
+  try {
+    await localTerminalService.cleanup()
+  } catch (error) {
+    console.error('清理本地终端失败:', error)
+  }
+
   if (process.platform !== 'darwin') {
     app.quit()
   }

@@ -7,7 +7,9 @@ import type {
   TransferResult,
   TransferProgress,
   ElectronAPI,
-  LocalDirectoryResult
+  LocalDirectoryResult,
+  LocalTerminalOptions,
+  SSHCredentials
 } from '../types'
 
 // Custom APIs for renderer
@@ -113,6 +115,46 @@ const api: ElectronAPI = {
   system: {
     getFonts: (): Promise<{ success: boolean; fonts: string[] }> =>
       ipcRenderer.invoke('system:get-fonts')
+  },
+
+  // Local Terminal API
+  localTerminal: {
+    createTerminal: (
+      options: LocalTerminalOptions
+    ): Promise<{
+      success: boolean
+      terminalId?: string
+      error?: string
+    }> => ipcRenderer.invoke('local-terminal:create', options),
+
+    writeToTerminal: (terminalId: string, data: string): Promise<void> =>
+      ipcRenderer.invoke('local-terminal:write', terminalId, data),
+
+    resizeTerminal: (terminalId: string, cols: number, rows: number): Promise<void> =>
+      ipcRenderer.invoke('local-terminal:resize', terminalId, cols, rows),
+
+    closeTerminal: (terminalId: string): Promise<void> =>
+      ipcRenderer.invoke('local-terminal:close', terminalId),
+
+    onTerminalData: (callback: (terminalId: string, data: string) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, terminalId: string, data: string): void =>
+        callback(terminalId, data)
+      ipcRenderer.on('local-terminal:data', handler)
+
+      return (): void => {
+        ipcRenderer.removeListener('local-terminal:data', handler)
+      }
+    },
+
+    onTerminalExit: (callback: (terminalId: string, code: number) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, terminalId: string, code: number): void =>
+        callback(terminalId, code)
+      ipcRenderer.on('local-terminal:exit', handler)
+
+      return (): void => {
+        ipcRenderer.removeListener('local-terminal:exit', handler)
+      }
+    }
   }
 }
 
@@ -157,7 +199,7 @@ const ipcHandler = (_event: Electron.IpcRendererEvent, data: string): void => {
 ipcRenderer.on('ssh:data', ipcHandler)
 
 api.ssh = {
-  connect: (credentials) => ipcRenderer.invoke('ssh:connect', credentials),
+  connect: (credentials: SSHCredentials) => ipcRenderer.invoke('ssh:connect', credentials),
   disconnect: () => ipcRenderer.invoke('ssh:disconnect'),
   send: (data: string) => ipcRenderer.invoke('ssh:send', data),
   onData: (callback: (data: string) => void) => {

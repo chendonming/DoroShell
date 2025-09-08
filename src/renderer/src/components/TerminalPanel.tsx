@@ -3,7 +3,7 @@ import { notify } from '../utils/notifications'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import type { ElectronAPI } from '../../../types'
+import type { ElectronAPI, TerminalSession } from '../../../types'
 
 interface TerminalPanelProps {
   isOpen: boolean
@@ -12,6 +12,12 @@ interface TerminalPanelProps {
   onToggleMaximize?: () => void
   isConnected?: boolean
   currentServer?: string
+  // 终端类型和本地终端配置
+  terminalType?: 'ssh' | 'local'
+  localTerminalCwd?: string
+  // 新增：会话管理相关
+  sessionId?: string
+  onSessionUpdate?: (updates: Partial<TerminalSession>) => void
 }
 
 const TerminalPanel: React.FC<TerminalPanelProps> = ({
@@ -20,20 +26,35 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   isMaximized,
   onToggleMaximize,
   isConnected,
-  currentServer
+  currentServer,
+  terminalType = 'ssh',
+  localTerminalCwd,
+  sessionId,
+  onSessionUpdate
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Terminal | null>(null)
   const measureRef = useRef<HTMLDivElement | null>(null)
   const lastSentRef = useRef<{ cmd: string; ts: number } | null>(null)
   const echoAccumRef = useRef<string>('')
-  // connection state is provided by parent
-  const connected = isConnected ?? false
-  const serverInfo = currentServer ?? ''
 
-  // only notify when connection transitions from connected -> disconnected
+  // 本地终端相关状态
+  const [localTerminalId, setLocalTerminalId] = React.useState<string | null>(null)
+  const [localTerminalActive, setLocalTerminalActive] = React.useState(false)
+
+  // connection state is provided by parent
+  const connected = terminalType === 'local' ? localTerminalActive : (isConnected ?? false)
+  const serverInfo =
+    terminalType === 'local' ? `本地终端 - ${localTerminalCwd || ''}` : (currentServer ?? '')
+
+  // only notify when SSH connection transitions from connected -> disconnected
   const prevConnectedRef = useRef<boolean | null>(null)
   useEffect(() => {
+    // 只对SSH终端进行连接状态通知，本地终端不需要
+    if (terminalType !== 'ssh') {
+      return
+    }
+
     const prev = prevConnectedRef.current
     // if previously connected and now not connected, notify
     if (prev === true && !connected) {
@@ -41,7 +62,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     }
     // update previous state for next change
     prevConnectedRef.current = connected
-  }, [connected])
+  }, [connected, terminalType])
 
   useEffect(() => {
     if (!isOpen) return
@@ -397,9 +418,51 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         })
       : () => {}
 
+    // 本地终端数据处理
+    const localTerminalCleanup = electronApi?.localTerminal?.onTerminalData
+      ? electronApi.localTerminal.onTerminalData((termId: string, data: string) => {
+          if (termId === localTerminalId) {
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('[local-terminal:data preview]', termId, data.slice(0, 100))
+            }
+            term.write(data)
+
+            // ensure layout after data arrives
+            try {
+              ensureFitAndResize()
+            } catch {
+              /* ignore */
+            }
+            requestAnimationFrame(() => {
+              try {
+                ensureFitAndResize()
+              } catch {
+                /* ignore */
+              }
+            })
+          }
+        })
+      : () => {}
+
+    // 本地终端退出处理
+    const localTerminalExitCleanup = electronApi?.localTerminal?.onTerminalExit
+      ? electronApi.localTerminal.onTerminalExit((termId: string, exitCode: number) => {
+          if (termId === localTerminalId) {
+            console.log(`本地终端 ${termId} 已退出，退出码: ${exitCode}`)
+            setLocalTerminalActive(false)
+            setLocalTerminalId(null)
+            term.write(`\r\n\x1b[31m终端已退出 (退出码: ${exitCode})\x1b[0m\r\n`)
+          }
+        })
+      : () => {}
+
     term.onData((data: string) => {
-      // Only forward input to SSH when we know the connection is active
-      if (connected && electronApi?.ssh?.send) {
+      // 根据终端类型路由数据
+      if (terminalType === 'local' && localTerminalId && localTerminalActive) {
+        // 发送到本地终端
+        electronApi?.localTerminal?.writeToTerminal(localTerminalId, data)
+      } else if (terminalType === 'ssh' && connected && electronApi?.ssh?.send) {
+        // 发送到SSH终端
         electronApi.ssh.send(data)
       }
 
@@ -467,6 +530,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
     return () => {
       cleanup()
+      localTerminalCleanup()
+      localTerminalExitCleanup()
       ro.disconnect()
       mo.disconnect()
       try {
@@ -481,6 +546,66 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     }
   }, [isOpen, connected])
 
+  // 本地终端初始化
+  useEffect(() => {
+    if (terminalType === 'local' && isOpen && localTerminalCwd && !localTerminalId) {
+      // 创建本地终端
+      const initLocalTerminal = async () => {
+        try {
+          const result = await window.api.localTerminal?.createTerminal({
+            cwd: localTerminalCwd,
+            cols: 80,
+            rows: 24
+          })
+
+          if (result?.success && result.terminalId) {
+            setLocalTerminalId(result.terminalId)
+            setLocalTerminalActive(true)
+            console.log('本地终端创建成功:', result.terminalId)
+
+            // 更新会话状态
+            if (onSessionUpdate) {
+              onSessionUpdate({
+                isActive: true,
+                localTerminalId: result.terminalId
+              })
+            }
+          } else {
+            console.error('创建本地终端失败:', result?.error)
+            notify('创建本地终端失败: ' + (result?.error || '未知错误'), 'error')
+
+            // 更新会话状态为失败
+            if (onSessionUpdate) {
+              onSessionUpdate({ isActive: false })
+            }
+          }
+        } catch (error) {
+          console.error('创建本地终端异常:', error)
+          notify('创建本地终端异常', 'error')
+
+          if (onSessionUpdate) {
+            onSessionUpdate({ isActive: false })
+          }
+        }
+      }
+
+      initLocalTerminal()
+    }
+
+    // 清理本地终端
+    return () => {
+      if (localTerminalId && terminalType === 'local') {
+        window.api.localTerminal?.closeTerminal(localTerminalId).catch(console.error)
+        setLocalTerminalId(null)
+        setLocalTerminalActive(false)
+
+        if (onSessionUpdate) {
+          onSessionUpdate({ isActive: false, localTerminalId: undefined })
+        }
+      }
+    }
+  }, [terminalType, isOpen, localTerminalCwd, localTerminalId]) // 移除 onSessionUpdate 依赖，避免不必要的重新创建
+
   // listen for injection events from command manager — inject directly into terminal input
   useEffect(() => {
     const handler = (ev: Event): void => {
@@ -490,7 +615,24 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         const electronApi = (window as unknown as Window & { api?: ElectronAPI }).api
         if (detail && typeof detail.command === 'string') {
           const cmd = detail.command
-          if (connected && electronApi?.ssh?.send) {
+          if (terminalType === 'local' && localTerminalId && localTerminalActive) {
+            // 本地终端命令注入
+            try {
+              term?.write(cmd)
+              // 直接发送命令字符到本地终端
+              for (const ch of cmd) {
+                try {
+                  electronApi?.localTerminal?.writeToTerminal(localTerminalId, ch)
+                } catch {
+                  // ignore per-char send errors
+                }
+              }
+              term?.focus()
+            } catch {
+              /* ignore */
+            }
+          } else if (terminalType === 'ssh' && connected && electronApi?.ssh?.send) {
+            // SSH终端命令注入(原有逻辑)
             // prepare to accumulate remote echo and suppress it
             echoAccumRef.current = ''
             lastSentRef.current = { cmd, ts: Date.now() }
@@ -558,100 +700,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
   return (
     <div className="h-full w-full flex flex-col">
-      <div className="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-black/90 shadow-sm dark:shadow-none">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-900 dark:text-white">
-            {serverInfo || 'SSH 终端'}
-          </span>
-          <span
-            className={`text-xs ${
-              connected ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-            }`}
-          >
-            {connected ? '已连接' : '未连接'}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onToggleMaximize}
-            title={isMaximized ? '还原' : '最大化'}
-            className="px-2 py-1 rounded bg-transparent text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition transform focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-300 dark:focus:ring-gray-600"
-            aria-label={isMaximized ? '还原' : '最大化'}
-          >
-            {isMaximized ? (
-              // Windows-style Restore icon
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 12 12"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <rect
-                  x="3"
-                  y="1"
-                  width="8"
-                  height="8"
-                  stroke="currentColor"
-                  strokeWidth="1"
-                  fill="none"
-                />
-                <rect
-                  x="1"
-                  y="3"
-                  width="8"
-                  height="8"
-                  stroke="currentColor"
-                  strokeWidth="1"
-                  fill="none"
-                />
-              </svg>
-            ) : (
-              // Windows-style Maximize icon
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 12 12"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <rect
-                  x="1.5"
-                  y="1.5"
-                  width="9"
-                  height="9"
-                  stroke="currentColor"
-                  strokeWidth="1"
-                  fill="none"
-                />
-              </svg>
-            )}
-          </button>
-          <button
-            onClick={onClose}
-            title="关闭"
-            className="px-2 py-1 rounded bg-transparent text-gray-800 dark:text-white hover:bg-red-500 dark:hover:bg-red-600 hover:text-white active:scale-95 transition transform focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-300 dark:focus:ring-red-600"
-            aria-label="关闭终端"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 12 12"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="block"
-            >
-              <path
-                d="M3 3L9 9M9 3L3 9"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-      </div>
+      {/* 直接显示终端内容，标题栏由 MultiTerminalPanel 管理 */}
       <div
         ref={containerRef}
         className="relative flex-1 bg-white text-gray-900 dark:bg-black/90 dark:text-white p-0 overflow-hidden shadow-sm border border-gray-200 dark:border-transparent"

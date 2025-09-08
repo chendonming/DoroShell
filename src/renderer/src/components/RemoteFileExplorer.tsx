@@ -30,6 +30,7 @@ interface RemoteFileExplorerProps {
       draggedFile?: File
     }
   ) => Promise<void>
+  onOpenSSHTerminal?: () => void // 新增：打开SSH终端回调
 }
 
 export interface RemoteFileExplorerRef {
@@ -48,7 +49,7 @@ interface DragState {
 }
 
 const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerProps>(
-  ({ onAddTransfer }, ref) => {
+  ({ onAddTransfer, onOpenSSHTerminal }, ref) => {
     const [remotePath, setRemotePath] = useState('/')
     const pathInputRef = useRef<PathInputHandle | null>(null)
     // 输入框的临时值，只有在用户按 Enter 或选择历史项时才触发真正的导航和目录刷新
@@ -794,6 +795,29 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             ? '仅通过 SSH shell 提供文件操作（兼容），下载可能失败'
             : '请选择要下载的文件',
         icon: '⬇️'
+      })
+
+      // 添加分割线和终端选项
+      items.push({ separator: true })
+
+      // 打开SSH终端选项
+      items.push({
+        label: '打开SSH终端',
+        action: () => {
+          if (onOpenSSHTerminal) {
+            onOpenSSHTerminal()
+          } else {
+            notify('功能暂未实现', 'info')
+          }
+          closeContextMenu()
+        },
+        disabled: !isConnected || !protocols.includes('ssh'),
+        disabledReason: !isConnected
+          ? '未连接到 FTP/SFTP，无法打开SSH终端'
+          : !protocols.includes('ssh')
+            ? '当前连接不支持SSH终端'
+            : '',
+        icon: '🔧'
       })
 
       return items

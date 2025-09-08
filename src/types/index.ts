@@ -166,6 +166,54 @@ export interface SSHAPI {
   onData: (callback: (data: string) => void) => () => void
 }
 
+// Local Terminal related types
+export interface LocalTerminalOptions {
+  cwd: string // 工作目录
+  shell?: string // 终端类型 (cmd.exe, powershell.exe, bash 等)
+  cols?: number // 终端列数
+  rows?: number // 终端行数
+}
+
+export interface LocalTerminalSession {
+  id: string
+  isActive: boolean
+  cwd: string
+}
+
+// 多终端会话管理类型
+export interface TerminalSession {
+  id: string
+  type: 'ssh' | 'local'
+  title: string
+  isActive: boolean
+  // SSH 终端特有属性
+  serverInfo?: string
+  isConnected?: boolean
+  // 本地终端特有属性
+  cwd?: string
+  localTerminalId?: string
+  // 创建时间（用于排序）
+  createdAt: number
+}
+
+export interface LocalTerminalAPI {
+  createTerminal: (options: LocalTerminalOptions) => Promise<{
+    success: boolean
+    terminalId?: string
+    error?: string
+  }>
+
+  writeToTerminal: (terminalId: string, data: string) => Promise<void>
+
+  resizeTerminal: (terminalId: string, cols: number, rows: number) => Promise<void>
+
+  closeTerminal: (terminalId: string) => Promise<void>
+
+  onTerminalData: (callback: (terminalId: string, data: string) => void) => () => void
+
+  onTerminalExit: (callback: (terminalId: string, code: number) => void) => () => void
+}
+
 // window controls API exposed from preload
 export interface WindowControlsAPI {
   minimize: () => Promise<void>
@@ -182,6 +230,7 @@ export interface ElectronAPI {
   fs: LocalFileSystemAPI
   path: PathAPI
   ssh?: SSHAPI
+  localTerminal?: LocalTerminalAPI
   windowControls?: WindowControlsAPI
 }
 
