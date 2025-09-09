@@ -129,18 +129,18 @@ export class SFTPService extends EventEmitter {
         }
       }
 
+      // 确定目标路径
+      let targetPath = remotePath || this.currentRemotePath || '/'
+
+      // 标准化路径，确保使用正斜杠
+      targetPath = targetPath.replace(/\\/g, '/')
+
+      // 如果路径不以 / 开头，添加它
+      if (!targetPath.startsWith('/')) {
+        targetPath = '/' + targetPath
+      }
+
       try {
-        // 确定目标路径
-        let targetPath = remotePath || this.currentRemotePath || '/'
-
-        // 标准化路径，确保使用正斜杠
-        targetPath = targetPath.replace(/\\/g, '/')
-
-        // 如果路径不以 / 开头，添加它
-        if (!targetPath.startsWith('/')) {
-          targetPath = '/' + targetPath
-        }
-
         const list = await this.client.list(targetPath)
         const files: FileItem[] = list
           .filter((item) => {
@@ -184,24 +184,15 @@ export class SFTPService extends EventEmitter {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : '未知错误'
 
-        // 如果请求的路径失败，尝试使用根目录
-        if (remotePath && remotePath !== '/') {
-          console.warn(`无法访问路径 ${remotePath}，尝试使用根目录`)
-          return this.listDirectory('/')
-        }
-
+        // 不再自动回退到根目录，直接返回失败结果
+        // 这样前端可以正确判断目录不存在的情况
+        console.log(`[SFTPService] Directory '${targetPath}' not accessible: ${errorMessage}`)
+        
         return {
           success: false,
           files: [],
           currentPath: this.currentRemotePath || '/',
-          error: `此 SFTP 服务器不支持目录列表操作。这通常发生在高度安全化的服务器上。
-
-建议解决方案：
-1. 联系服务器管理员启用目录列表功能
-2. 如果知道具体文件路径，可以直接进行文件传输
-3. 尝试使用其他 SFTP 客户端验证服务器配置
-
-技术错误: ${errorMessage}`
+          error: `无法访问目录: ${errorMessage}`
         }
       }
     })
@@ -295,6 +286,24 @@ export class SFTPService extends EventEmitter {
       }
 
       const localStats = fs.statSync(localPath)
+
+      // 确保远程目录存在
+      const remoteDir = path.posix.dirname(remotePath)
+      if (remoteDir && remoteDir !== '/' && remoteDir !== '.') {
+        console.log('[SFTPService] Ensuring remote directory exists:', remoteDir)
+        try {
+          await this.client.mkdir(remoteDir, true)
+        } catch (mkdirError) {
+          console.error('[SFTPService] Failed to create remote directory:', mkdirError)
+          const errorMessage =
+            mkdirError instanceof Error ? mkdirError.message : 'Failed to create directory'
+          return {
+            success: false,
+            transferId,
+            error: `无法创建远程目录 ${remoteDir}: ${errorMessage}`
+          }
+        }
+      }
 
       try {
         // 创建上传进度回调

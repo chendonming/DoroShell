@@ -225,6 +225,26 @@ export class FTPService extends EventEmitter {
         }
 
         const stats = fs.statSync(localPath)
+
+        // 确保远程目录存在
+        const remoteDir = path.posix.dirname(remotePath)
+        if (remoteDir && remoteDir !== '/' && remoteDir !== '.') {
+          console.log('[FTPService] Ensuring remote directory exists:', remoteDir)
+          try {
+            await this.client.ensureDir(remoteDir)
+          } catch (ensureDirError) {
+            console.error('[FTPService] Failed to create remote directory:', ensureDirError)
+            const errorMessage =
+              ensureDirError instanceof Error
+                ? ensureDirError.message
+                : 'Failed to create directory'
+            return {
+              success: false,
+              transferId,
+              error: `无法创建远程目录 ${remoteDir}: ${errorMessage}`
+            }
+          }
+        }
         let uploadedBytes = 0
 
         // 发送初始进度

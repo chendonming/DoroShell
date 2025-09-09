@@ -420,6 +420,7 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
           // 检查远端是否已存在同名文件
           try {
             const listRes = await window.api.ftp.listDirectory(remoteCurrentPath)
+            // 如果目录存在且成功获取了文件列表
             if (listRes.success && Array.isArray(listRes.files)) {
               const exists = listRes.files.some((f) => f.name === item.name)
               if (exists) {
@@ -445,8 +446,15 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                 }
               }
             }
+            // 如果listRes.success为false，说明目录不存在或无法访问，文件肯定不存在，可以直接上传
           } catch (err) {
-            console.warn('Failed to check remote existence for', item.name, err)
+            // 如果检查失败（比如目录不存在），假设文件不存在，可以直接上传
+            console.warn(
+              'Failed to check remote existence for',
+              item.name,
+              '- assuming file does not exist:',
+              err
+            )
           }
 
           uploads.push({
@@ -489,6 +497,8 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                         const idx = targetRemote.lastIndexOf('/')
                         const parentDir = idx > 0 ? targetRemote.slice(0, idx) : '/'
                         const listRes = await window.api.ftp.listDirectory(parentDir)
+
+                        // 如果父目录不存在，说明文件肯定不存在，可以直接上传
                         if (listRes.success && Array.isArray(listRes.files)) {
                           const exists = listRes.files.some((f) => f.name === child.name)
                           if (exists) {
@@ -514,8 +524,15 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                             }
                           }
                         }
+                        // 如果listRes.success为false，说明目录不存在，文件肯定不存在，可以直接上传
                       } catch (err) {
-                        console.warn('Failed to check remote existence for', child.name, err)
+                        // 如果检查失败（比如目录不存在），假设文件不存在，可以直接上传
+                        console.warn(
+                          'Failed to check remote existence for',
+                          child.name,
+                          '- assuming file does not exist:',
+                          err
+                        )
                       }
                     }
                     uploads.push({

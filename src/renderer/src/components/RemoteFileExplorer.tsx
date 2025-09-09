@@ -527,6 +527,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
       placeholder: string
       defaultValue: string
       action: string
+      targetFile?: RemoteFileItem // 保存目标文件信息，避免依赖可能被清除的 ctxTargetRef
     }>({
       visible: false,
       title: '',
@@ -583,7 +584,7 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             break
           case 'rename':
             {
-              const target = ctxTargetRef.current
+              const target = promptDialog.targetFile
               if (target) {
                 const oldPath =
                   remotePath === '/' ? `/${target.name}` : `${remotePath}/${target.name}`
@@ -595,6 +596,8 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
                 } else {
                   notify('重命名失败: ' + (result.error || '当前协议或连接不支持重命名'), 'error')
                 }
+              } else {
+                notify('重命名失败: 未找到目标文件', 'error')
               }
             }
             break
@@ -608,14 +611,15 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
           title: '',
           placeholder: '',
           defaultValue: '',
-          action: ''
+          action: '',
+          targetFile: undefined
         })
         closeContextMenu()
       }
     }
 
     const handlePromptCancel = (): void => {
-      setPromptDialog({ visible: false, title: '', placeholder: '', defaultValue: '', action: '' })
+      setPromptDialog({ visible: false, title: '', placeholder: '', defaultValue: '', action: '', targetFile: undefined })
       closeContextMenu()
     }
 
@@ -778,7 +782,8 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
               title: '重命名',
               placeholder: '请输入新名称',
               defaultValue: target.name,
-              action: 'rename'
+              action: 'rename',
+              targetFile: target // 保存目标文件信息到 prompt dialog state
             })
           } else {
             notify('请选择目标重命名项', 'info')
