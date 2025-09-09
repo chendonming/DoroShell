@@ -187,7 +187,7 @@ export class SFTPService extends EventEmitter {
         // 不再自动回退到根目录，直接返回失败结果
         // 这样前端可以正确判断目录不存在的情况
         console.log(`[SFTPService] Directory '${targetPath}' not accessible: ${errorMessage}`)
-        
+
         return {
           success: false,
           files: [],

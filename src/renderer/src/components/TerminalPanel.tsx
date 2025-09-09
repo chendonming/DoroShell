@@ -1,9 +1,11 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { notify } from '../utils/notifications'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { ElectronAPI, TerminalSession } from '../../../types'
+import ContextMenu from './ContextMenu'
+import { useConfirm } from '../hooks/useConfirm'
 
 interface TerminalPanelProps {
   isOpen: boolean
@@ -37,8 +39,96 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const [localTerminalId, setLocalTerminalId] = React.useState<string | null>(null)
   const [localTerminalActive, setLocalTerminalActive] = React.useState(false)
 
+  // 右键菜单状态
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean
+    x: number
+    y: number
+  }>({ visible: false, x: 0, y: 0 })
+
+  // 确认对话框钩子
+  const confirm = useConfirm()
+
   // connection state is provided by parent
   const connected = terminalType === 'local' ? localTerminalActive : (isConnected ?? false)
+
+  // 处理粘贴操作
+  const handlePaste = async (): Promise<void> => {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (!text) {
+        notify('剪贴板为空', 'info')
+        return
+      }
+
+      // 检查是否为多行文字
+      const lines = text.split(/\r?\n/)
+      if (lines.length > 1) {
+        // 多行文字，显示确认对话框
+        const shouldPaste = await confirm({
+          title: '确认粘贴',
+          message: `您要粘贴的内容包含 ${lines.length} 行文字。是否继续？`,
+          confirmText: '粘贴',
+          cancelText: '取消'
+        })
+
+        if (!shouldPaste) {
+          return
+        }
+      }
+
+      // 执行粘贴操作
+      const term = termRef.current
+      if (term && (connected || (terminalType === 'local' && localTerminalActive))) {
+        if (terminalType === 'local' && localTerminalId && localTerminalActive) {
+          // 本地终端粘贴（只发送到后端，不在本地显示）
+          const electronApi = (window as unknown as Window & { api?: ElectronAPI }).api
+          electronApi?.localTerminal?.writeToTerminal(localTerminalId, text)
+        } else if (terminalType === 'ssh' && connected) {
+          // SSH终端粘贴（只发送到后端，不在本地显示）
+          const electronApi = (window as unknown as Window & { api?: ElectronAPI }).api
+          electronApi?.ssh?.send(text)
+        }
+
+        // 聚焦终端
+        term.focus()
+
+        notify('粘贴成功', 'success')
+      } else {
+        notify('终端未连接，无法粘贴', 'error')
+      }
+    } catch (error) {
+      console.error('粘贴失败:', error)
+      notify('粘贴失败：无法访问剪贴板', 'error')
+    }
+  }
+
+  // 处理右键菜单
+  const handleContextMenu = (event: React.MouseEvent): void => {
+    event.preventDefault()
+
+    // 获取当前鼠标位置（重要：使用当前操作时的鼠标位置）
+    setContextMenu({
+      visible: true,
+      x: event.clientX,
+      y: event.clientY
+    })
+  }
+
+  // 关闭右键菜单
+  const closeContextMenu = (): void => {
+    setContextMenu({ visible: false, x: 0, y: 0 })
+  }
+
+  // 右键菜单项目
+  const contextMenuItems = [
+    {
+      label: '粘贴',
+      icon: '📋',
+      action: handlePaste,
+      disabled: terminalType === 'local' ? !localTerminalActive : !connected
+    }
+  ]
 
   // only notify when SSH connection transitions from connected -> disconnected
   const prevConnectedRef = useRef<boolean | null>(null)
@@ -697,6 +787,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       <div
         ref={containerRef}
         className="relative flex-1 bg-white text-gray-900 dark:bg-black/90 dark:text-white p-0 overflow-hidden shadow-sm border border-gray-200 dark:border-transparent"
+        onContextMenu={handleContextMenu}
       >
         {/* hidden element used to measure character size — placed inside container to inherit sizing */}
         <div
@@ -719,6 +810,15 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
         {/* direct injection — overlay removed */}
       </div>
+
+      {/* 右键上下文菜单 */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        items={contextMenuItems}
+        onClose={closeContextMenu}
+      />
     </div>
   )
 }

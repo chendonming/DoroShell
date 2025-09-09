@@ -619,7 +619,14 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     }
 
     const handlePromptCancel = (): void => {
-      setPromptDialog({ visible: false, title: '', placeholder: '', defaultValue: '', action: '', targetFile: undefined })
+      setPromptDialog({
+        visible: false,
+        title: '',
+        placeholder: '',
+        defaultValue: '',
+        action: '',
+        targetFile: undefined
+      })
       closeContextMenu()
     }
 
