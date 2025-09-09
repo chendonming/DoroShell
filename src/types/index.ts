@@ -273,6 +273,7 @@ export interface RemoteFileEditingSession {
   conflictResolution?: ConflictStrategy
   startTime: Date
   lastSyncTime?: Date
+  remoteBaseTime?: Date // 远程文件的基准修改时间，用于冲突检测
   error?: string
 }
 

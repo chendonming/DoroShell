@@ -92,6 +92,12 @@ export class RemoteFileEditingService extends EventEmitter {
         }
       }
 
+      // 获取远程文件的修改时间作为基准
+      const remoteFileInfo = await this.getRemoteFileInfo(remotePath)
+      if (remoteFileInfo) {
+        session.remoteBaseTime = remoteFileInfo.modified
+      }
+
       // 更新会话状态
       session.status = 'READY'
       session.lastModified = new Date()
@@ -535,6 +541,13 @@ export class RemoteFileEditingService extends EventEmitter {
         session.status = 'EDITING'
         session.isModified = false
         session.lastSyncTime = new Date()
+
+        // 更新远程文件基准时间
+        const updatedRemoteInfo = await this.getRemoteFileInfo(session.remotePath)
+        if (updatedRemoteInfo) {
+          session.remoteBaseTime = updatedRemoteInfo.modified
+        }
+
         this.emitStatusChange(session)
         return { success: true }
       } else {
@@ -558,6 +571,27 @@ export class RemoteFileEditingService extends EventEmitter {
   }
 
   /**
+   * 获取远程文件信息
+   */
+  private async getRemoteFileInfo(remotePath: string): Promise<{ modified: Date } | null> {
+    try {
+      const result = await this.connectionManager.listDirectory(dirname(remotePath))
+      if (result.success && result.files) {
+        const remoteFile = result.files.find((file) => file.name === basename(remotePath))
+        if (remoteFile) {
+          return {
+            modified: new Date(remoteFile.modified)
+          }
+        }
+      }
+      return null
+    } catch (error) {
+      console.error('Failed to get remote file info:', error)
+      return null
+    }
+  }
+
+  /**
    * 检查冲突
    */
   private async checkForConflicts(session: RemoteFileEditingSession): Promise<boolean> {
@@ -567,9 +601,18 @@ export class RemoteFileEditingService extends EventEmitter {
       if (result.success && result.files) {
         const remoteFile = result.files.find((file) => file.name === basename(session.remotePath))
         if (remoteFile) {
-          const remoteModified = new Date(remoteFile.modified)
-          // 如果远程文件的修改时间晚于会话开始时间，则存在冲突
-          return remoteModified > session.startTime
+          const currentRemoteTime = new Date(remoteFile.modified)
+
+          // 使用远程文件的基准时间进行比较，避免本地时间与远程时间不一致的问题
+          if (session.remoteBaseTime) {
+            // 添加2秒的容忍度，避免时间精度问题
+            const tolerance = 2000 // 2秒
+            return currentRemoteTime.getTime() > session.remoteBaseTime.getTime() + tolerance
+          } else {
+            // 如果没有基准时间，则无法检测冲突，假设无冲突
+            console.warn('缺少远程文件基准时间，无法准确检测冲突')
+            return false
+          }
         }
       }
       return false
@@ -602,6 +645,7 @@ export class RemoteFileEditingService extends EventEmitter {
       startTime: session.startTime,
       ...(session.conflictResolution && { conflictResolution: session.conflictResolution }),
       ...(session.lastSyncTime && { lastSyncTime: session.lastSyncTime }),
+      ...(session.remoteBaseTime && { remoteBaseTime: session.remoteBaseTime }),
       ...(session.error && { error: session.error })
     }
     this.emit('statusChange', cleanSession)
