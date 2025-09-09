@@ -52,6 +52,40 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   // connection state is provided by parent
   const connected = terminalType === 'local' ? localTerminalActive : (isConnected ?? false)
 
+  // 处理复制操作
+  const handleCopy = async (): Promise<void> => {
+    try {
+      const term = termRef.current
+      if (!term) {
+        notify('终端未初始化', 'error')
+        return
+      }
+
+      // 检查是否有选中的文字
+      if (!term.hasSelection()) {
+        notify('没有选中的文字', 'info')
+        return
+      }
+
+      // 获取选中的文字
+      const selectedText = term.getSelection()
+      if (!selectedText) {
+        notify('未获取到选中的文字', 'info')
+        return
+      }
+
+      // 复制到剪贴板
+      await navigator.clipboard.writeText(selectedText)
+      notify('复制成功', 'success')
+
+      // 聚焦终端
+      term.focus()
+    } catch (error) {
+      console.error('复制失败:', error)
+      notify('复制失败：无法访问剪贴板', 'error')
+    }
+  }
+
   // 处理粘贴操作
   const handlePaste = async (): Promise<void> => {
     try {
@@ -120,15 +154,36 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     setContextMenu({ visible: false, x: 0, y: 0 })
   }
 
-  // 右键菜单项目
-  const contextMenuItems = [
-    {
-      label: '粘贴',
-      icon: '📋',
-      action: handlePaste,
-      disabled: terminalType === 'local' ? !localTerminalActive : !connected
-    }
-  ]
+  // 右键菜单项目（在菜单显示时动态计算）
+  const getContextMenuItems = (): Array<{
+    label: string
+    icon: string
+    action: () => Promise<void>
+    disabled: boolean
+    disabledReason?: string
+  }> => {
+    const term = termRef.current
+    const hasSelection = term ? term.hasSelection() : false
+
+    return [
+      {
+        label: '复制',
+        icon: '📋',
+        action: handleCopy,
+        disabled: !hasSelection,
+        disabledReason: hasSelection ? undefined : '没有选中的文字'
+      },
+      {
+        label: '粘贴',
+        icon: '📋',
+        action: handlePaste,
+        disabled: terminalType === 'local' ? !localTerminalActive : !connected,
+        disabledReason: (terminalType === 'local' ? !localTerminalActive : !connected)
+          ? '终端未连接'
+          : undefined
+      }
+    ]
+  }
 
   // only notify when SSH connection transitions from connected -> disconnected
   const prevConnectedRef = useRef<boolean | null>(null)
@@ -192,6 +247,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       fontFamily: 'monospace',
       fontSize: 14,
       convertEol: true,
+      // 启用文字选择功能
+      allowProposedApi: true,
       theme: document.documentElement.classList.contains('dark') ? xtermDarkTheme : xtermLightTheme
     })
     // 提前声明 fit/webgl 引用，避免在使用前重复声明
@@ -816,7 +873,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         visible={contextMenu.visible}
         x={contextMenu.x}
         y={contextMenu.y}
-        items={contextMenuItems}
+        items={getContextMenuItems()}
         onClose={closeContextMenu}
       />
     </div>
