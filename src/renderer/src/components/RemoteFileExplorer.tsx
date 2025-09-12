@@ -79,6 +79,26 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     // 编辑会话状态管理
     const [editingSessions, setEditingSessions] = useState<RemoteFileEditingSession[]>([])
 
+    // 操作状态管理 - 记录正在进行异步操作的文件
+    const [operatingFiles, setOperatingFiles] = useState<Set<string>>(new Set())
+
+    // 操作状态管理函数
+    const addOperatingFile = (fileName: string): void => {
+      setOperatingFiles((prev) => new Set([...prev, fileName]))
+    }
+
+    const removeOperatingFile = (fileName: string): void => {
+      setOperatingFiles((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(fileName)
+        return newSet
+      })
+    }
+
+    const isFileOperating = (fileName: string): boolean => {
+      return operatingFiles.has(fileName)
+    }
+
     // 统一的排序函数：目录优先，然后按名称（不区分大小写）排序
     const sortRemoteFilesList = (list: RemoteFileItem[]): RemoteFileItem[] => {
       return list.slice().sort((a, b) => {
@@ -586,15 +606,23 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             {
               const target = promptDialog.targetFile
               if (target) {
-                const oldPath =
-                  remotePath === '/' ? `/${target.name}` : `${remotePath}/${target.name}`
-                const newPath = remotePath === '/' ? `/${value}` : `${remotePath}/${value}`
-                const result = await window.api.ftp.renameFile(oldPath, newPath)
-                if (result.success) {
-                  await loadRemoteFiles()
-                  notify('重命名成功', 'success')
-                } else {
-                  notify('重命名失败: ' + (result.error || '当前协议或连接不支持重命名'), 'error')
+                // 添加操作状态
+                addOperatingFile(target.name)
+
+                try {
+                  const oldPath =
+                    remotePath === '/' ? `/${target.name}` : `${remotePath}/${target.name}`
+                  const newPath = remotePath === '/' ? `/${value}` : `${remotePath}/${value}`
+                  const result = await window.api.ftp.renameFile(oldPath, newPath)
+                  if (result.success) {
+                    await loadRemoteFiles()
+                    notify('重命名成功', 'success')
+                  } else {
+                    notify('重命名失败: ' + (result.error || '当前协议或连接不支持重命名'), 'error')
+                  }
+                } finally {
+                  // 移除操作状态
+                  removeOperatingFile(target.name)
                 }
               } else {
                 notify('重命名失败: 未找到目标文件', 'error')
@@ -796,13 +824,18 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             notify('请选择目标重命名项', 'info')
           }
         },
-        // 仅在单选时允许重命名
-        disabled: !canModify || selectedFiles.size > 1,
+        // 仅在单选时允许重命名，且目标文件不能正在操作中
+        disabled:
+          !canModify ||
+          selectedFiles.size > 1 ||
+          Boolean(ctxTargetRef.current && isFileOperating(ctxTargetRef.current.name)),
         disabledReason: !isConnected
           ? '未连接到 FTP/SFTP，无法重命名'
           : protocols.length === 1 && protocols[0] === 'ssh'
             ? '仅通过 SSH shell 提供文件操作（兼容），请选择一个要重命名的项'
-            : '请选择一个要重命名的项',
+            : ctxTargetRef.current && isFileOperating(ctxTargetRef.current.name)
+              ? '文件正在操作中，请稍后再试'
+              : '请选择一个要重命名的项',
         icon: '✏️'
       })
 
@@ -820,6 +853,14 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
 
             if (targets.length === 0) {
               notify('请选择要删除的文件', 'info')
+              closeContextMenu()
+              return
+            }
+
+            // 检查是否有文件正在操作中
+            const operatingTargets = targets.filter((name) => isFileOperating(name))
+            if (operatingTargets.length > 0) {
+              notify(`文件 ${operatingTargets.join('、')} 正在操作中，请稍后再试`, 'info')
               closeContextMenu()
               return
             }
@@ -854,19 +895,27 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
             })
             if (!ok) return
 
-            for (const t of targets) {
-              const path = remotePath === '/' ? `/${t}` : `${remotePath}/${t}`
-              // 先尝试删除为文件，否则删除目录
-              const resFile = await window.api.ftp.deleteFile(path)
-              if (!resFile.success) {
-                const resDir = await window.api.ftp.deleteDirectory(path)
-                if (!resDir.success) {
-                  notify(`删除 ${t} 失败`, 'error')
+            // 为所有要删除的文件添加操作状态
+            targets.forEach((name) => addOperatingFile(name))
+
+            try {
+              for (const t of targets) {
+                const path = remotePath === '/' ? `/${t}` : `${remotePath}/${t}`
+                // 先尝试删除为文件，否则删除目录
+                const resFile = await window.api.ftp.deleteFile(path)
+                if (!resFile.success) {
+                  const resDir = await window.api.ftp.deleteDirectory(path)
+                  if (!resDir.success) {
+                    notify(`删除 ${t} 失败`, 'error')
+                  }
                 }
               }
-            }
 
-            await loadRemoteFiles()
+              await loadRemoteFiles()
+            } finally {
+              // 移除所有操作状态
+              targets.forEach((name) => removeOperatingFile(name))
+            }
           } catch (err) {
             console.error('删除失败', err)
             notify('删除失败', 'error')
@@ -1077,6 +1126,11 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
     }
 
     const getFileIcon = (file: RemoteFileItem): string => {
+      // 检查是否正在操作该文件
+      if (isFileOperating(file.name)) {
+        return '⏳' // 操作中
+      }
+
       // 检查是否正在编辑该文件
       const filePath = remotePath === '/' ? `/${file.name}` : `${remotePath}/${file.name}`
       const editingSession = editingSessions.find((session) => session.remotePath === filePath)
@@ -1252,10 +1306,27 @@ const RemoteFileExplorer = forwardRef<RemoteFileExplorerRef, RemoteFileExplorerP
                         />
                         <span className="text-lg">{getFileIcon(file)}</span>
                         <div className="flex items-center space-x-2">
-                          <span className="text-sm text-gray-900 dark:text-white font-medium">
+                          <span
+                            className={`text-sm font-medium ${
+                              isFileOperating(file.name)
+                                ? 'text-gray-500 dark:text-gray-400'
+                                : 'text-gray-900 dark:text-white'
+                            }`}
+                          >
                             {file.name}
                           </span>
                           {(() => {
+                            // 优先显示操作状态
+                            if (isFileOperating(file.name)) {
+                              return (
+                                <span className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 px-2 py-1 rounded-full flex items-center gap-1">
+                                  <span className="animate-spin">⟳</span>
+                                  操作中
+                                </span>
+                              )
+                            }
+
+                            // 然后显示编辑状态
                             const filePath =
                               remotePath === '/' ? `/${file.name}` : `${remotePath}/${file.name}`
                             const editingSession = editingSessions.find(
