@@ -26,15 +26,20 @@ const api: ElectronAPI = {
     changeDirectory: (remotePath: string): Promise<DirectoryListResult> =>
       ipcRenderer.invoke('ftp:change-directory', remotePath),
 
-    uploadFile: (localPath: string, remotePath: string): Promise<TransferResult> =>
-      ipcRenderer.invoke('ftp:upload-file', localPath, remotePath),
+    uploadFile: (
+      localPath: string,
+      remotePath: string,
+      transferId?: string
+    ): Promise<TransferResult> =>
+      ipcRenderer.invoke('ftp:upload-file', localPath, remotePath, transferId),
 
     uploadDraggedFile: (
       fileBuffer: ArrayBuffer,
       fileName: string,
-      remotePath: string
+      remotePath: string,
+      transferId?: string
     ): Promise<TransferResult> =>
-      ipcRenderer.invoke('ftp:upload-dragged-file', fileBuffer, fileName, remotePath),
+      ipcRenderer.invoke('ftp:upload-dragged-file', fileBuffer, fileName, remotePath, transferId),
 
     downloadFile: (
       remotePath: string,

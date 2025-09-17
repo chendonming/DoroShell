@@ -121,11 +121,16 @@ export interface FTPAPI {
   disconnect: () => Promise<void>
   listDirectory: (remotePath?: string) => Promise<DirectoryListResult>
   changeDirectory: (remotePath: string) => Promise<DirectoryListResult>
-  uploadFile: (localPath: string, remotePath: string) => Promise<TransferResult>
+  uploadFile: (
+    localPath: string,
+    remotePath: string,
+    transferId?: string
+  ) => Promise<TransferResult>
   uploadDraggedFile: (
     fileBuffer: ArrayBuffer,
     fileName: string,
-    remotePath: string
+    remotePath: string,
+    transferId?: string
   ) => Promise<TransferResult>
   downloadFile: (
     remotePath: string,

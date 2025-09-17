@@ -321,11 +321,16 @@ const DoroShell: React.FC = () => {
           result = await window.api.ftp.uploadDraggedFile(
             fileBuffer,
             transfer.draggedFile.name,
-            transfer.remotePath
+            transfer.remotePath,
+            newTransfer.id
           )
         } else {
           // 处理常规文件上传
-          result = await window.api.ftp.uploadFile(transfer.localPath, transfer.remotePath)
+          result = await window.api.ftp.uploadFile(
+            transfer.localPath,
+            transfer.remotePath,
+            newTransfer.id
+          )
         }
 
         if (result.success) {

@@ -262,25 +262,30 @@ export class SFTPService extends EventEmitter {
     })
   }
 
-  async uploadFile(localPath: string, remotePath: string): Promise<TransferResult> {
-    const transferId = `sftp_upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  async uploadFile(
+    localPath: string,
+    remotePath: string,
+    transferId?: string
+  ): Promise<TransferResult> {
+    const finalTransferId =
+      transferId || `sftp_upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     return this.queueOperation(async () => {
       if (!this.client || !this.isConnected) {
         return {
           success: false,
-          transferId,
+          transferId: finalTransferId,
           error: '未连接到SFTP服务器'
         }
       }
 
-      console.log('[SFTPService] uploadFile called ->', { transferId, localPath, remotePath })
+      console.log('[SFTPService] uploadFile called ->', { finalTransferId, localPath, remotePath })
 
       if (!fs.existsSync(localPath)) {
         console.warn('[SFTPService] uploadFile local file not found ->', localPath)
         return {
           success: false,
-          transferId,
+          transferId: finalTransferId,
           error: '本地文件不存在'
         }
       }
@@ -299,7 +304,7 @@ export class SFTPService extends EventEmitter {
             mkdirError instanceof Error ? mkdirError.message : 'Failed to create directory'
           return {
             success: false,
-            transferId,
+            transferId: finalTransferId,
             error: `无法创建远程目录 ${remoteDir}: ${errorMessage}`
           }
         }
@@ -310,10 +315,15 @@ export class SFTPService extends EventEmitter {
         const progressCallback = (total: number, uploaded: number): void => {
           const progress = Math.round((uploaded / total) * 100)
           // 记录进度
-          console.log('[SFTPService] upload progress ->', { transferId, uploaded, total, progress })
+          console.log('[SFTPService] upload progress ->', {
+            transferId: finalTransferId,
+            uploaded,
+            total,
+            progress
+          })
 
           this.emit('transferProgress', {
-            transferId,
+            transferId: finalTransferId,
             progress,
             status: 'uploading' as const
           } as TransferProgress)
@@ -324,7 +334,11 @@ export class SFTPService extends EventEmitter {
         })
 
         // 发送完成进度
-        console.log('[SFTPService] uploadFile success ->', { transferId, localPath, remotePath })
+        console.log('[SFTPService] uploadFile success ->', {
+          transferId: finalTransferId,
+          localPath,
+          remotePath
+        })
 
         // 上传后尝试校验远程文件大小
         let verified = false
@@ -336,7 +350,7 @@ export class SFTPService extends EventEmitter {
           const remoteSize = (remoteStat && (remoteStat.size ?? remoteStat.attrs?.size)) || 0
           console.log(
             '[SFTPService] upload verify stat -> transferId=%s remoteSize=%s expected=%s',
-            transferId,
+            finalTransferId,
             remoteSize,
             localStats.size
           )
@@ -346,7 +360,7 @@ export class SFTPService extends EventEmitter {
         } catch (verifyErr) {
           console.warn(
             '[SFTPService] upload verify stat failed -> transferId=%s remotePath=%s error=%o',
-            transferId,
+            finalTransferId,
             remotePath,
             verifyErr
           )
@@ -354,7 +368,7 @@ export class SFTPService extends EventEmitter {
 
         console.log(
           '[SFTPService] uploadFile completed -> transferId=%s localPath=%s remotePath=%s verified=%s',
-          transferId,
+          finalTransferId,
           localPath,
           remotePath,
           verified
@@ -363,7 +377,7 @@ export class SFTPService extends EventEmitter {
         if (!verified) {
           const msg = `Upload reported success but verification failed for ${remotePath}`
           this.emit('transferProgress', {
-            transferId,
+            transferId: finalTransferId,
             progress: 0,
             status: 'failed' as const,
             error: msg
@@ -371,26 +385,26 @@ export class SFTPService extends EventEmitter {
 
           return {
             success: false,
-            transferId,
+            transferId: finalTransferId,
             error: msg
           }
         }
 
         this.emit('transferProgress', {
-          transferId,
+          transferId: finalTransferId,
           progress: 100,
           status: 'completed' as const
         } as TransferProgress)
 
         return {
           success: true,
-          transferId
+          transferId: finalTransferId
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : '未知错误'
 
         this.emit('transferProgress', {
-          transferId,
+          transferId: finalTransferId,
           progress: 0,
           status: 'failed' as const,
           error: errorMessage
@@ -398,7 +412,7 @@ export class SFTPService extends EventEmitter {
 
         return {
           success: false,
-          transferId,
+          transferId: finalTransferId,
           error: `上传失败: ${errorMessage}`
         }
       }
