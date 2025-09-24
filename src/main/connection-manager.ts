@@ -14,7 +14,7 @@ interface ConnectionService {
   disconnect(): Promise<void>
   listDirectory(remotePath?: string): Promise<DirectoryListResult>
   changeDirectory(remotePath: string): Promise<DirectoryListResult>
-  uploadFile(localPath: string, remotePath: string): Promise<TransferResult>
+  uploadFile(localPath: string, remotePath: string, transferId?: string): Promise<TransferResult>
   downloadFile(remotePath: string, localPath: string, transferId?: string): Promise<TransferResult>
   getConnectionStatus(): boolean
   getCurrentCredentials(): FTPCredentials | null
@@ -135,20 +135,25 @@ export class ConnectionManager {
     return await this.currentService.changeDirectory(remotePath)
   }
 
-  async uploadFile(localPath: string, remotePath: string): Promise<TransferResult> {
+  async uploadFile(
+    localPath: string,
+    remotePath: string,
+    transferId?: string
+  ): Promise<TransferResult> {
     if (!this.currentService) {
       return {
         success: false,
-        transferId: 'no_connection',
+        transferId: transferId || 'no_connection',
         error: '未连接到服务器'
       }
     }
     console.log('[ConnectionManager] uploadFile ->', {
       localPath,
       remotePath,
+      transferId,
       protocol: this.currentProtocol
     })
-    const result = await this.currentService.uploadFile(localPath, remotePath)
+    const result = await this.currentService.uploadFile(localPath, remotePath, transferId)
     console.log('[ConnectionManager] uploadFile result ->', result)
     return result
   }

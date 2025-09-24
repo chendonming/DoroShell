@@ -303,9 +303,14 @@ app.whenReady().then(() => {
 
   ipcMain.handle(
     'ftp:upload-file',
-    async (_, localPath: string, remotePath: string): Promise<TransferResult> => {
-      console.log('[IPC] ftp:upload-file called ->', { localPath, remotePath })
-      const result = await connectionManager.uploadFile(localPath, remotePath)
+    async (
+      _,
+      localPath: string,
+      remotePath: string,
+      transferId?: string
+    ): Promise<TransferResult> => {
+      console.log('[IPC] ftp:upload-file called ->', { localPath, remotePath, transferId })
+      const result = await connectionManager.uploadFile(localPath, remotePath, transferId)
       console.log('[IPC] ftp:upload-file result ->', result)
       return result
     }
@@ -318,14 +323,15 @@ app.whenReady().then(() => {
       _,
       fileBuffer: ArrayBuffer,
       fileName: string,
-      remotePath: string
+      remotePath: string,
+      transferId?: string
     ): Promise<TransferResult> => {
       const os = await import('os')
       const fs = await import('fs/promises')
       const path = await import('path')
 
       try {
-        console.log('[IPC] ftp:upload-dragged-file called ->', { fileName, remotePath })
+        console.log('[IPC] ftp:upload-dragged-file called ->', { fileName, remotePath, transferId })
         // 创建临时文件
         const tempDir = os.tmpdir()
         const tempFilePath = path.join(tempDir, `drag_upload_${Date.now()}_${fileName}`)
@@ -335,7 +341,7 @@ app.whenReady().then(() => {
 
         // 上传文件
         console.log('[IPC] ftp:upload-dragged-file tempFile ->', tempFilePath)
-        const result = await connectionManager.uploadFile(tempFilePath, remotePath)
+        const result = await connectionManager.uploadFile(tempFilePath, remotePath, transferId)
         console.log('[IPC] ftp:upload-dragged-file result ->', result)
 
         // 清理临时文件
@@ -349,7 +355,7 @@ app.whenReady().then(() => {
       } catch (error) {
         return {
           success: false,
-          transferId: `failed_${Date.now()}`,
+          transferId: transferId || `failed_${Date.now()}`,
           error: error instanceof Error ? error.message : '未知错误'
         }
       }

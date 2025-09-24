@@ -262,14 +262,107 @@ const DoroShell: React.FC = () => {
     }
   }
 
+  const updateTransferStatus = (id: string, status: TransferItem['status']) => {
+    setTransfers((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)))
+    if (status === 'pending') {
+      startUpload(id)
+    }
+  }
+
+  const startUpload = async (id: string) => {
+    const transfer = transfers.find((t) => t.id === id)
+    if (!transfer || transfer.type !== 'upload') return
+
+    try {
+      console.log('[Renderer] FTPManager start upload ->', {
+        localPath: transfer.localPath,
+        remotePath: transfer.remotePath,
+        dragged: !!transfer.draggedFile
+      })
+      let result: { success: boolean; error?: string }
+
+      if (transfer.draggedFile) {
+        // 处理拖拽上传的文件
+        const fileBuffer = await transfer.draggedFile.arrayBuffer()
+        result = await window.api.ftp.uploadDraggedFile(
+          fileBuffer,
+          transfer.draggedFile.name,
+          transfer.remotePath,
+          transfer.id
+        )
+      } else {
+        // 处理常规文件上传
+        result = await window.api.ftp.uploadFile(
+          transfer.localPath,
+          transfer.remotePath,
+          transfer.id
+        )
+      }
+
+      if (result.success) {
+        console.log('[Renderer] FTPManager upload success ->', { id: transfer.id, result })
+        // 上传成功
+        setTransfers((prev) =>
+          prev.map((t) =>
+            t.id === transfer.id ? { ...t, status: 'completed', progress: 100 } : t
+          )
+        )
+        // 上传成功后：如果是批量上传，延迟刷新直到该批次所有文件完成；否则立即刷新
+        if (transfer.batchId) {
+          batchPending.current[transfer.batchId] = Math.max(
+            0,
+            (batchPending.current[transfer.batchId] || 1) - 1
+          )
+          if (batchPending.current[transfer.batchId] === 0) {
+            // batch complete -> refresh once and cleanup
+            delete batchPending.current[transfer.batchId]
+            if (remoteFileExplorerRef.current) {
+              await remoteFileExplorerRef.current.refresh()
+            }
+          }
+        } else {
+          if (remoteFileExplorerRef.current) {
+            await remoteFileExplorerRef.current.refresh()
+          }
+        }
+      } else {
+        console.error('[Renderer] FTPManager upload failed ->', { id: transfer.id, result })
+        // 上传失败
+        setTransfers((prev) =>
+          prev.map((t) => (t.id === transfer.id ? { ...t, status: 'failed' } : t))
+        )
+        // on failure, also decrement pending count for batch (and refresh when zero)
+        if (transfer.batchId) {
+          batchPending.current[transfer.batchId] = Math.max(
+            0,
+            (batchPending.current[transfer.batchId] || 1) - 1
+          )
+          if (batchPending.current[transfer.batchId] === 0) {
+            delete batchPending.current[transfer.batchId]
+            if (remoteFileExplorerRef.current) {
+              await remoteFileExplorerRef.current.refresh()
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Upload failed:', error)
+      // 更新转移状态为失败
+      setTransfers((prev) =>
+        prev.map((t) => (t.id === transfer.id ? { ...t, status: 'failed' } : t))
+      )
+    }
+  }
+
   const addTransfer = async (
-    transfer: Omit<TransferItem, 'id' | 'progress' | 'status'>
+    transfer: Omit<TransferItem, 'id' | 'progress' | 'status'> & { id?: string; progress?: number; status?: TransferItem['status'] }
   ): Promise<void> => {
+    const status = transfer.status || 'pending'
     const newTransfer: TransferItem = {
       ...transfer,
-      id: Math.random().toString(36).substr(2, 9),
-      progress: 0,
-      status: 'pending'
+      id: transfer.id || Math.random().toString(36).substr(2, 9),
+      progress: transfer.progress || 0,
+      status
     }
 
     // track batch pending count
@@ -279,108 +372,45 @@ const DoroShell: React.FC = () => {
 
     setTransfers((prev) => [...prev, newTransfer])
 
-    // 立即开始下载
-    try {
-      if (transfer.type === 'download') {
-        console.log('[Renderer] FTPManager start download ->', {
-          localPath: transfer.localPath,
-          remotePath: transfer.remotePath
-        })
-        const result = await window.api.ftp.downloadFile(
-          transfer.remotePath,
-          transfer.localPath,
-          newTransfer.id
-        )
+    if (status === 'pending') {
+      // 立即开始传输
+      try {
+        if (transfer.type === 'download') {
+          console.log('[Renderer] FTPManager start download ->', {
+            localPath: transfer.localPath,
+            remotePath: transfer.remotePath
+          })
+          const result = await window.api.ftp.downloadFile(
+            transfer.remotePath,
+            transfer.localPath,
+            newTransfer.id
+          )
 
-        if (result.success) {
-          console.log('[Renderer] FTPManager download success ->', { id: newTransfer.id, result })
-          // 下载成功，更新状态为完成
-          setTransfers((prev) =>
-            prev.map((t) =>
-              t.id === newTransfer.id ? { ...t, status: 'completed', progress: 100 } : t
+          if (result.success) {
+            console.log('[Renderer] FTPManager download success ->', { id: newTransfer.id, result })
+            // 下载成功，更新状态为完成
+            setTransfers((prev) =>
+              prev.map((t) =>
+                t.id === newTransfer.id ? { ...t, status: 'completed', progress: 100 } : t
+              )
             )
-          )
-        } else {
-          console.error('[Renderer] FTPManager download failed ->', { id: newTransfer.id, result })
-          // 下载失败
-          setTransfers((prev) =>
-            prev.map((t) => (t.id === newTransfer.id ? { ...t, status: 'failed' } : t))
-          )
-        }
-      } else if (transfer.type === 'upload') {
-        console.log('[Renderer] FTPManager start upload ->', {
-          localPath: transfer.localPath,
-          remotePath: transfer.remotePath,
-          dragged: !!transfer.draggedFile
-        })
-        let result: { success: boolean; error?: string }
-
-        if (transfer.draggedFile) {
-          // 处理拖拽上传的文件
-          const fileBuffer = await transfer.draggedFile.arrayBuffer()
-          result = await window.api.ftp.uploadDraggedFile(
-            fileBuffer,
-            transfer.draggedFile.name,
-            transfer.remotePath
-          )
-        } else {
-          // 处理常规文件上传
-          result = await window.api.ftp.uploadFile(transfer.localPath, transfer.remotePath)
-        }
-
-        if (result.success) {
-          console.log('[Renderer] FTPManager upload success ->', { id: newTransfer.id, result })
-          // 上传成功
-          setTransfers((prev) =>
-            prev.map((t) =>
-              t.id === newTransfer.id ? { ...t, status: 'completed', progress: 100 } : t
-            )
-          )
-          // 上传成功后：如果是批量上传，延迟刷新直到该批次所有文件完成；否则立即刷新
-          if (transfer.batchId) {
-            batchPending.current[transfer.batchId] = Math.max(
-              0,
-              (batchPending.current[transfer.batchId] || 1) - 1
-            )
-            if (batchPending.current[transfer.batchId] === 0) {
-              // batch complete -> refresh once and cleanup
-              delete batchPending.current[transfer.batchId]
-              if (remoteFileExplorerRef.current) {
-                await remoteFileExplorerRef.current.refresh()
-              }
-            }
           } else {
-            if (remoteFileExplorerRef.current) {
-              await remoteFileExplorerRef.current.refresh()
-            }
-          }
-        } else {
-          console.error('[Renderer] FTPManager upload failed ->', { id: newTransfer.id, result })
-          // 上传失败
-          setTransfers((prev) =>
-            prev.map((t) => (t.id === newTransfer.id ? { ...t, status: 'failed' } : t))
-          )
-          // on failure, also decrement pending count for batch (and refresh when zero)
-          if (transfer.batchId) {
-            batchPending.current[transfer.batchId] = Math.max(
-              0,
-              (batchPending.current[transfer.batchId] || 1) - 1
+            console.error('[Renderer] FTPManager download failed ->', { id: newTransfer.id, result })
+            // 下载失败
+            setTransfers((prev) =>
+              prev.map((t) => (t.id === newTransfer.id ? { ...t, status: 'failed' } : t))
             )
-            if (batchPending.current[transfer.batchId] === 0) {
-              delete batchPending.current[transfer.batchId]
-              if (remoteFileExplorerRef.current) {
-                await remoteFileExplorerRef.current.refresh()
-              }
-            }
           }
+        } else if (transfer.type === 'upload') {
+          await startUpload(newTransfer.id)
         }
+      } catch (error) {
+        console.error('Transfer failed:', error)
+        // 更新转移状态为失败
+        setTransfers((prev) =>
+          prev.map((t) => (t.id === newTransfer.id ? { ...t, status: 'failed' } : t))
+        )
       }
-    } catch (error) {
-      console.error('Transfer failed:', error)
-      // 更新转移状态为失败
-      setTransfers((prev) =>
-        prev.map((t) => (t.id === newTransfer.id ? { ...t, status: 'failed' } : t))
-      )
     }
   }
 
@@ -555,6 +585,7 @@ const DoroShell: React.FC = () => {
             <div className="w-1/2 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 min-h-0 overflow-hidden">
               <LocalFileExplorer
                 onAddTransfer={addTransfer}
+                onUpdateTransferStatus={updateTransferStatus}
                 onCurrentPathChange={setLocalCurrentPath}
                 onOpenLocalTerminal={handleOpenLocalTerminal}
               />

@@ -199,19 +199,23 @@ export class FTPService extends EventEmitter {
     })
   }
 
-  async uploadFile(localPath: string, remotePath: string): Promise<TransferResult> {
-    const transferId = Math.random().toString(36).substr(2, 9)
+  async uploadFile(
+    localPath: string,
+    remotePath: string,
+    transferId?: string
+  ): Promise<TransferResult> {
+    const finalTransferId = transferId || Math.random().toString(36).substr(2, 9)
 
     return this.queueOperation(async () => {
       if (!this.client || !this.isConnected) {
         return {
           success: false,
-          transferId,
+          transferId: finalTransferId,
           error: 'Not connected to FTP server'
         }
       }
 
-      console.log('[FTPService] uploadFile called ->', { transferId, localPath, remotePath })
+      console.log('[FTPService] uploadFile called ->', { finalTransferId, localPath, remotePath })
 
       try {
         // 检查本地文件是否存在
@@ -219,7 +223,7 @@ export class FTPService extends EventEmitter {
           console.warn('[FTPService] uploadFile local file not found ->', localPath)
           return {
             success: false,
-            transferId,
+            transferId: finalTransferId,
             error: 'Local file does not exist'
           }
         }
@@ -240,7 +244,7 @@ export class FTPService extends EventEmitter {
                 : 'Failed to create directory'
             return {
               success: false,
-              transferId,
+              transferId: finalTransferId,
               error: `无法创建远程目录 ${remoteDir}: ${errorMessage}`
             }
           }
@@ -249,7 +253,7 @@ export class FTPService extends EventEmitter {
 
         // 发送初始进度
         this.emit('transferProgress', {
-          transferId,
+          transferId: finalTransferId,
           progress: 0,
           status: 'uploading'
         } as TransferProgress)
@@ -261,13 +265,13 @@ export class FTPService extends EventEmitter {
 
           // 记录进度信息
           console.log('[FTPService] upload progress ->', {
-            transferId,
+            transferId: finalTransferId,
             bytes: uploadedBytes,
             progress
           })
 
           this.emit('transferProgress', {
-            transferId,
+            transferId: finalTransferId,
             progress: Math.min(progress, 100),
             status: 'uploading'
           } as TransferProgress)
@@ -278,7 +282,7 @@ export class FTPService extends EventEmitter {
         const baseName = path.posix.basename(remotePath)
         const tmpRemote = path.posix.join(
           parentDir === '.' ? '/' : parentDir,
-          `${baseName}.tmp-${transferId}`
+          `${baseName}.tmp-${finalTransferId}`
         )
 
         await this.client.uploadFrom(localPath, tmpRemote)
@@ -292,7 +296,7 @@ export class FTPService extends EventEmitter {
         } catch (renameErr) {
           console.error(
             '[FTPService] failed to rename tmp remote -> transferId=%s tmpRemote=%s remotePath=%s error=%o',
-            transferId,
+            finalTransferId,
             tmpRemote,
             remotePath,
             renameErr
@@ -305,7 +309,7 @@ export class FTPService extends EventEmitter {
           }
           const msg = `Upload completed but rename to ${remotePath} failed: ${renameErr instanceof Error ? renameErr.message : String(renameErr)}`
           this.emit('transferProgress', {
-            transferId,
+            transferId: finalTransferId,
             progress: 0,
             status: 'failed',
             error: msg
@@ -313,7 +317,7 @@ export class FTPService extends EventEmitter {
 
           return {
             success: false,
-            transferId,
+            transferId: finalTransferId,
             error: msg
           }
         }
@@ -329,7 +333,7 @@ export class FTPService extends EventEmitter {
           const remoteSize = await this.client.size(remotePath)
           console.log(
             '[FTPService] upload verify size -> transferId=%s remoteSize=%s expected=%s',
-            transferId,
+            finalTransferId,
             remoteSize,
             stats.size
           )
@@ -349,7 +353,7 @@ export class FTPService extends EventEmitter {
                 typeof found.size === 'number' ? found.size : Number(found.size) || 0
               console.log(
                 '[FTPService] upload verify list -> transferId=%s parentDir=%s baseName=%s foundSize=%s',
-                transferId,
+                finalTransferId,
                 parentDir,
                 baseName,
                 foundSize
@@ -358,7 +362,7 @@ export class FTPService extends EventEmitter {
             } else {
               console.warn(
                 '[FTPService] upload verify list: not found -> transferId=%s parentDir=%s baseName=%s',
-                transferId,
+                finalTransferId,
                 parentDir,
                 baseName
               )
@@ -366,7 +370,7 @@ export class FTPService extends EventEmitter {
           } catch (listErr) {
             console.warn(
               '[FTPService] upload verify failed to determine remote file -> transferId=%s remotePath=%s error=%o',
-              transferId,
+              finalTransferId,
               remotePath,
               listErr
             )
@@ -375,7 +379,7 @@ export class FTPService extends EventEmitter {
 
         console.log(
           '[FTPService] uploadFile success -> transferId=%s localPath=%s remotePath=%s verified=%s',
-          transferId,
+          finalTransferId,
           localPath,
           remotePath,
           verified
@@ -384,9 +388,12 @@ export class FTPService extends EventEmitter {
         if (!verified) {
           // 如果无法校验或校验失败，返回失败状态以告知上层真实情况
           const msg = `Upload reported success but verification failed for ${remotePath}`
-          console.error('[FTPService] upload verification failed ->', { transferId, remotePath })
+          console.error('[FTPService] upload verification failed ->', {
+            transferId: finalTransferId,
+            remotePath
+          })
           this.emit('transferProgress', {
-            transferId,
+            transferId: finalTransferId,
             progress: 0,
             status: 'failed',
             error: msg
@@ -394,25 +401,25 @@ export class FTPService extends EventEmitter {
 
           return {
             success: false,
-            transferId,
+            transferId: finalTransferId,
             error: msg
           }
         }
 
         // 发送完成状态
         this.emit('transferProgress', {
-          transferId,
+          transferId: finalTransferId,
           progress: 100,
           status: 'completed'
         } as TransferProgress)
 
         return {
           success: true,
-          transferId
+          transferId: finalTransferId
         }
       } catch (error) {
         console.error('[FTPService] uploadFile failed ->', {
-          transferId,
+          transferId: finalTransferId,
           localPath,
           remotePath,
           error
@@ -426,7 +433,7 @@ export class FTPService extends EventEmitter {
         const errorMessage = error instanceof Error ? error.message : 'Upload failed'
 
         this.emit('transferProgress', {
-          transferId,
+          transferId: finalTransferId,
           progress: 0,
           status: 'failed',
           error: errorMessage
@@ -434,7 +441,7 @@ export class FTPService extends EventEmitter {
 
         return {
           success: false,
-          transferId,
+          transferId: finalTransferId,
           error: errorMessage
         }
       }
