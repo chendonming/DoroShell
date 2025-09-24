@@ -17,6 +17,7 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
 
   const getStatusIcon = (status: TransferItem['status']): string => {
     switch (status) {
+      case 'preparing':
       case 'pending':
         return '⏳'
       case 'uploading':
@@ -26,6 +27,8 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
         return '✅'
       case 'failed':
         return '❌'
+      case 'cancelled':
+        return '🚫'
       default:
         return '⏳'
     }
@@ -33,6 +36,8 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
 
   const getStatusText = (status: TransferItem['status']): string => {
     switch (status) {
+      case 'preparing':
+        return '准备中'
       case 'pending':
         return '等待中'
       case 'uploading':
@@ -43,6 +48,8 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
         return '已完成'
       case 'failed':
         return '失败'
+      case 'cancelled':
+        return '已取消'
       default:
         return '未知'
     }
@@ -50,6 +57,7 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
 
   const getStatusColor = (status: TransferItem['status']): string => {
     switch (status) {
+      case 'preparing':
       case 'pending':
         return 'text-yellow-600 dark:text-yellow-400'
       case 'uploading':
@@ -59,6 +67,8 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
         return 'text-green-600 dark:text-green-400'
       case 'failed':
         return 'text-red-600 dark:text-red-400'
+      case 'cancelled':
+        return 'text-gray-600 dark:text-gray-400'
       default:
         return 'text-gray-600 dark:text-gray-400'
     }
@@ -66,6 +76,7 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
 
   const getProgressBarColor = (status: TransferItem['status']): string => {
     switch (status) {
+      case 'preparing':
       case 'pending':
         return 'bg-yellow-500'
       case 'uploading':
@@ -75,6 +86,8 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
         return 'bg-green-500'
       case 'failed':
         return 'bg-red-500'
+      case 'cancelled':
+        return 'bg-gray-500'
       default:
         return 'bg-gray-500'
     }
@@ -82,7 +95,7 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
 
   const clearCompleted = (): void => {
     transfers
-      .filter((item) => item.status === 'completed')
+      .filter((item) => item.status === 'completed' || item.status === 'cancelled')
       .forEach((item) => {
         onRemoveTransfer(item.id)
       })
@@ -115,7 +128,7 @@ const FileTransfer: React.FC<FileTransferProps> = ({ transfers, onRemoveTransfer
         <div className="flex space-x-2">
           <button
             onClick={clearCompleted}
-            disabled={completedCount === 0}
+            disabled={completedCount === 0 && transfers.filter((item) => item.status === 'cancelled').length === 0}
             className="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1 rounded-md text-sm transition-colors"
           >
             清除已完成
