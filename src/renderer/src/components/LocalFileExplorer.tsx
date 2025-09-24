@@ -9,6 +9,7 @@ import type { PathInputHandle } from './PathInput'
 
 interface LocalFileExplorerProps {
   onAddTransfer: (transfer: TransferItem) => void
+  onUpdateTransferStatus: (id: string, status: TransferItem['status']) => void
   onCurrentPathChange: (path: string) => void
   onOpenLocalTerminal?: (cwd: string) => void
 }
@@ -23,6 +24,7 @@ interface FileItem {
 
 const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
   onAddTransfer,
+  onUpdateTransferStatus,
   onCurrentPathChange,
   onOpenLocalTerminal
 }) => {
@@ -407,63 +409,42 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
       remotePath: string
       name: string
       size: number
+      id: string
     }> = []
     const seen = new Set<string>()
 
     const normalize = (p: string): string => p.replace(/\\/g, '/')
 
+    // 为本次批量上传生成唯一 batchId，FTPManager 将基于此合并刷新
+    const batchId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
     for (const item of selected) {
       if (item.type === 'file') {
         if (!seen.has(item.path)) {
           const targetRemote = joinRemote(remoteCurrentPath, item.name)
-
-          // 检查远端是否已存在同名文件
-          try {
-            const listRes = await window.api.ftp.listDirectory(remoteCurrentPath)
-            // 如果目录存在且成功获取了文件列表
-            if (listRes.success && Array.isArray(listRes.files)) {
-              const exists = listRes.files.some((f) => f.name === item.name)
-              if (exists) {
-                // 先检查批次级决策
-                if (batchOverwriteRef.current === 'noToAll') {
-                  seen.add(item.path)
-                  continue
-                }
-                if (batchOverwriteRef.current === 'yesToAll') {
-                  // proceed
-                } else {
-                  const decision = await askOverwrite(item.name)
-                  if (decision === 'no') {
-                    seen.add(item.path)
-                    continue
-                  }
-                  if (decision === 'yesToAll') batchOverwriteRef.current = 'yesToAll'
-                  if (decision === 'noToAll') {
-                    batchOverwriteRef.current = 'noToAll'
-                    seen.add(item.path)
-                    continue
-                  }
-                }
-              }
-            }
-            // 如果listRes.success为false，说明目录不存在或无法访问，文件肯定不存在，可以直接上传
-          } catch (err) {
-            // 如果检查失败（比如目录不存在），假设文件不存在，可以直接上传
-            console.warn(
-              'Failed to check remote existence for',
-              item.name,
-              '- assuming file does not exist:',
-              err
-            )
-          }
+          const id = `upload-${Date.now()}-${Math.random()}`
 
           uploads.push({
             localPath: item.path,
             remotePath: targetRemote,
             name: item.name,
-            size: item.size
+            size: item.size,
+            id
           })
           seen.add(item.path)
+
+          // 立即添加传输，状态为 'preparing'
+          onAddTransfer({
+            id,
+            filename: item.name,
+            size: item.size,
+            progress: 0,
+            status: 'preparing',
+            type: 'upload',
+            localPath: item.path,
+            remotePath: targetRemote,
+            batchId
+          })
         }
       } else {
         // 递归读取目录内容
@@ -489,59 +470,29 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
                       : child.name
                     const remoteRel = `${rootName}/${rel}`
                     const targetRemote = joinRemote(remoteCurrentPath, remoteRel)
+                    const id = `upload-${Date.now()}-${Math.random()}`
 
-                    // 检查是否存在同名远端文件（针对文件项）
-                    if (child.type === 'file') {
-                      try {
-                        // 计算父目录（避免在渲染器中使用 Node path）
-                        const idx = targetRemote.lastIndexOf('/')
-                        const parentDir = idx > 0 ? targetRemote.slice(0, idx) : '/'
-                        const listRes = await window.api.ftp.listDirectory(parentDir)
-
-                        // 如果父目录不存在，说明文件肯定不存在，可以直接上传
-                        if (listRes.success && Array.isArray(listRes.files)) {
-                          const exists = listRes.files.some((f) => f.name === child.name)
-                          if (exists) {
-                            // 批次决策检查
-                            if (batchOverwriteRef.current === 'noToAll') {
-                              seen.add(childPath)
-                              continue
-                            }
-                            if (batchOverwriteRef.current === 'yesToAll') {
-                              // proceed
-                            } else {
-                              const decision = await askOverwrite(child.name)
-                              if (decision === 'no') {
-                                seen.add(childPath)
-                                continue
-                              }
-                              if (decision === 'yesToAll') batchOverwriteRef.current = 'yesToAll'
-                              if (decision === 'noToAll') {
-                                batchOverwriteRef.current = 'noToAll'
-                                seen.add(childPath)
-                                continue
-                              }
-                            }
-                          }
-                        }
-                        // 如果listRes.success为false，说明目录不存在，文件肯定不存在，可以直接上传
-                      } catch (err) {
-                        // 如果检查失败（比如目录不存在），假设文件不存在，可以直接上传
-                        console.warn(
-                          'Failed to check remote existence for',
-                          child.name,
-                          '- assuming file does not exist:',
-                          err
-                        )
-                      }
-                    }
                     uploads.push({
                       localPath: childPath,
                       remotePath: targetRemote,
                       name: child.name,
-                      size: child.size
+                      size: child.size,
+                      id
                     })
                     seen.add(childPath)
+
+                    // 立即添加传输，状态为 'preparing'
+                    onAddTransfer({
+                      id,
+                      filename: child.name,
+                      size: child.size,
+                      progress: 0,
+                      status: 'preparing',
+                      type: 'upload',
+                      localPath: childPath,
+                      remotePath: targetRemote,
+                      batchId
+                    })
                   }
                 } else if (child.type === 'directory') {
                   stack.push(childPath)
@@ -555,21 +506,75 @@ const LocalFileExplorer: React.FC<LocalFileExplorerProps> = ({
       }
     }
 
-    // 触发上传
-    // 为本次批量上传生成唯一 batchId，FTPManager 将基于此合并刷新
-    const batchId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    for (const file of uploads) {
-      onAddTransfer({
-        id: `upload-${Date.now()}-${Math.random()}`,
-        filename: file.name,
-        size: file.size,
-        progress: 0,
-        status: 'pending',
-        type: 'upload',
-        localPath: file.localPath,
-        remotePath: file.remotePath,
-        batchId
-      })
+    // 异步处理覆盖检查 - 按目录批量检查以优化性能
+    const dirGroups = new Map<string, typeof uploads>()
+
+    // 按父目录分组上传项
+    for (const upload of uploads) {
+      const idx = upload.remotePath.lastIndexOf('/')
+      const parentDir = idx > 0 ? upload.remotePath.slice(0, idx) : '/'
+      if (!dirGroups.has(parentDir)) {
+        dirGroups.set(parentDir, [])
+      }
+      dirGroups.get(parentDir)!.push(upload)
+    }
+
+    // 为每个目录批量检查文件存在性
+    for (const [parentDir, dirUploads] of dirGroups) {
+      try {
+        const listRes = await window.api.ftp.listDirectory(parentDir)
+
+        if (listRes.success && Array.isArray(listRes.files)) {
+          const remoteFiles = listRes.files
+          const remoteFileNames = new Set(remoteFiles.map(f => f.name))
+
+          // 检查此目录中的每个上传项
+          for (const upload of dirUploads) {
+            const exists = remoteFileNames.has(upload.name)
+            if (exists) {
+              // 先检查批次级决策
+              if (batchOverwriteRef.current === 'noToAll') {
+                onUpdateTransferStatus(upload.id, 'cancelled')
+                continue
+              }
+              if (batchOverwriteRef.current === 'yesToAll') {
+                // proceed
+              } else {
+                const decision = await askOverwrite(upload.name)
+                if (decision === 'no') {
+                  onUpdateTransferStatus(upload.id, 'cancelled')
+                  continue
+                }
+                if (decision === 'yesToAll') batchOverwriteRef.current = 'yesToAll'
+                if (decision === 'noToAll') {
+                  batchOverwriteRef.current = 'noToAll'
+                  onUpdateTransferStatus(upload.id, 'cancelled')
+                  continue
+                }
+              }
+            }
+
+            // 开始上传
+            onUpdateTransferStatus(upload.id, 'pending')
+          }
+        } else {
+          // 目录不存在或无法访问，假设所有文件都不存在，直接开始上传
+          for (const upload of dirUploads) {
+            onUpdateTransferStatus(upload.id, 'pending')
+          }
+        }
+      } catch (err) {
+        // 如果检查失败（比如目录不存在），假设所有文件都不存在，直接开始上传
+        console.warn(
+          'Failed to check remote directory',
+          parentDir,
+          '- assuming files do not exist:',
+          err
+        )
+        for (const upload of dirUploads) {
+          onUpdateTransferStatus(upload.id, 'pending')
+        }
+      }
     }
 
     setSelectedFiles(new Set())

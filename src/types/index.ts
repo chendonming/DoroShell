@@ -33,7 +33,7 @@ export interface TransferItem {
   filename: string
   size: number
   progress: number
-  status: 'pending' | 'uploading' | 'downloading' | 'completed' | 'failed'
+  status: 'preparing' | 'pending' | 'uploading' | 'downloading' | 'completed' | 'failed' | 'cancelled'
   type: 'upload' | 'download'
   localPath: string
   remotePath: string
